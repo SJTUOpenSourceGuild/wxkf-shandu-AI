@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request,Query
 from fastapi.responses import PlainTextResponse
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
-import xml.etree.cElementTree as ET
 import xmltodict
 import sys
 import os
