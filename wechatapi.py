@@ -27,3 +27,38 @@ class WechatApi(AbstractApi) :
                 })
         self.access_token = response.get('access_token')
 
+
+def fetchWechatMsg(token, open_kf_id,
+                   sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
+    api = WechatApi(sCorpID, secret=secret)
+    response = api.httpCall(
+               WECHAT_API_TYPE['SYNC_MSG'],
+               {
+                   "cursor" : "",
+                   "token" : token,
+                #    "limit" : "",
+                #    "voice_format" : "",
+                   "open_kfid" : open_kf_id
+
+               })
+    msgDict = response
+    print(msgDict)
+    return msgDict
+
+def sendWechatMsgTouser(external_userid, open_kf_id, msgid, msg, msg_type = 'text'
+                        sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
+    api = WechatApi(sCorpID, secret=secret)
+    response = api.httpCall(
+        WECHAT_API_TYPE['SEND_MSG'],
+        {
+            "touser" : external_userid,
+            "open_kfid": open_kf_id,
+            "msgid": msgid,
+            "msgtype" : msg_type,
+            "text" : {
+                "content" : msg
+            }
+        }
+    )
+    return response
+
