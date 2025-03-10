@@ -4,13 +4,25 @@
 
 项目正常运行，需要设置如下环境变量
 
+**微信客服**相关
 * WECHAT_TOKEN
 * WECHAT_AESKEY
 * WECHAT_CORP_ID
 * WECHAT_SECRET
 * WECHAT_FASTAPI_PORT
+
+**HTTPS**相关
+
 * SLL_KEYFILE_PATH
 * SLL_CERTIFILE_PATH
+
+**RabbitMQ**相关
+
+* RABBITMQ_HOST
+* RABBITMQ_PORT
+* RABBITMQ_USERNAME
+* RABBITMQ_PASSWORD
+
 
 其中前面4个都是从[微信客服](https://kf.weixin.qq.com/)处获得，也就是需要开通*微信客服*并且**完成企业认证**。
 
@@ -22,6 +34,8 @@
 
 配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。在配置回调过程中，填写的URL必须是https（不确定），因此需要域名和SSL证书。将环境变量SLL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SLL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
 
+
+另外服务使用了RabbitMQ消息队列，因此需要指定RabbitMQ服务器及用户密码
 
 ### 微信客服的回调配置
 
