@@ -13,8 +13,8 @@
 
 **HTTPS**相关
 
-* SLL_KEYFILE_PATH
-* SLL_CERTIFILE_PATH
+* SSL_KEYFILE_PATH
+* SSL_CERTIFILE_PATH
 
 **RabbitMQ**相关
 
@@ -32,7 +32,7 @@
 
 然后来获取TOKEN和EncodingAESKey，两者是在**配置回调**的时候自行填写或者随机生成的，获得后分别设志伟WECHAT_TOKEN和WECHAT_AESKEY两个环境变量
 
-配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。在配置回调过程中，填写的URL必须是https（不确定），因此需要域名和SSL证书。将环境变量SLL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SLL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
+配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。在配置回调过程中，填写的URL必须是https（不确定），因此需要域名和SSL证书。将环境变量SSL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SSL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
 
 
 另外服务使用了RabbitMQ消息队列，因此需要指定RabbitMQ服务器及用户密码
