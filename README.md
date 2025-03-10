@@ -1,30 +1,31 @@
 ## 简介
 
-本项目主要是实现微信客服的接入。具体来说，就是监听用户发给客服的信息，完成信息的自动处理和回复。
+本项目主要处理微信客服的回调数据，有两种启动方式：
+
+* 通过RabbitMQ消息队列，从消息队列中获取回调数据，然后处理
+    * 启动入口`python RabbitMQUtils.py`
+* 通过FastAPI，直接监听来自微信的回调函数，进而处理
+    * 启动入口`python FastAPI_server.py`
+
+前者的设计架构是由Golang，采用Gin接收来自微信的回调函数，然后将消息直接发送给RabbitMQ消息队列。python从消息队列中获取回调数据后加以处理。
+
+这样设计的好处是，可以结合Golang的高并发特性，和Python的生态。
+因为笔者想做的服务，需要结合AI大语言模型、从链接中获取微信文章数据等功能，python由较好的生态。
+
+## 运行
+
+### 环境变量配置
 
 项目正常运行，需要设置如下环境变量
 
-**微信客服**相关
+#### 微信客服
+
 * WECHAT_TOKEN
 * WECHAT_AESKEY
 * WECHAT_CORP_ID
 * WECHAT_SECRET
-* WECHAT_FASTAPI_PORT
 
-**HTTPS**相关
-
-* SSL_KEYFILE_PATH
-* SSL_CERTIFILE_PATH
-
-**RabbitMQ**相关
-
-* RABBITMQ_HOST
-* RABBITMQ_PORT
-* RABBITMQ_USERNAME
-* RABBITMQ_PASSWORD
-
-
-其中前面4个都是从[微信客服](https://kf.weixin.qq.com/)处获得，也就是需要开通*微信客服*并且**完成企业认证**。
+这4个都是从[微信客服](https://kf.weixin.qq.com/)处获得，也就是需要开通*微信客服*并且**完成企业认证**。
 
 具体获取方式如下：
 
@@ -32,10 +33,32 @@
 
 然后来获取TOKEN和EncodingAESKey，两者是在**配置回调**的时候自行填写或者随机生成的，获得后分别设志伟WECHAT_TOKEN和WECHAT_AESKEY两个环境变量
 
-配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。在配置回调过程中，填写的URL必须是https（不确定），因此需要域名和SSL证书。将环境变量SSL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SSL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
+配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。
+在配置回调过程中，填写的URL必须是https（不确定），配置方法见下问FastAPI相关
 
+#### RabbitMQ
 
 另外服务使用了RabbitMQ消息队列，因此需要指定RabbitMQ服务器及用户密码
+这部分是RabbitMQ相关的环境变量，包括HOST、PORT、USERNAME、PASSWORD等
+
+* RABBITMQ_HOST
+* RABBITMQ_PORT
+* RABBITMQ_USERNAME
+* RABBITMQ_PASSWORD
+
+#### FastAPI相关
+
+这部分的环境变量只有选择使用FastAPI直接监听回调函数时才需要设置。
+
+* WECHAT_FASTAPI_PORT
+* SSL_KEYFILE_PATH
+* SSL_CERTIFILE_PATH
+
+WECHAT_FASTAPI_PORT是FastAPI监听的端口，比如8080
+
+SSL_KEYFILE_PATH和SSL_CERTIFILE_PATH是用来设置为HTTPS访问FastAPI服务，
+
+因此需要域名和SSL证书。将环境变量SSL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SSL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
 
 ### 微信客服的回调配置
 
