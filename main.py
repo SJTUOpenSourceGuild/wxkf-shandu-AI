@@ -95,4 +95,5 @@ async def handle_wechat_message(
 
 if __name__ == '__main__':
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ['WECHAT_FASTAPI_PORT']),ssl_keyfile=os.environ['SSL_KEYFILE_PATH'],ssl_certfile=os.environ['SSL_CERTIFILE_PATH'])
+    #uvicorn.run(app, host="0.0.0.0", port=int(os.environ['WECHAT_FASTAPI_PORT']),ssl_keyfile=os.environ['SSL_KEYFILE_PATH'],ssl_certfile=os.environ['SSL_CERTIFILE_PATH'])
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ['WECHAT_FASTAPI_PORT']))

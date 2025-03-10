@@ -45,7 +45,7 @@ def fetchWechatMsg(token, open_kf_id,
     print(msgDict)
     return msgDict
 
-def sendWechatMsgTouser(external_userid, open_kf_id, msgid, msg, msg_type = 'text'
+def sendWechatMsgTouser(external_userid, open_kf_id, msgid, msg, msg_type = 'text',
                         sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
     api = WechatApi(sCorpID, secret=secret)
     response = api.httpCall(

@@ -29,8 +29,7 @@ def process_task(task_data: dict):
     ret,sMsg=wxcpt.DecryptMsg( sReqData, sReqMsgSig, sReqTimeStamp, sReqNonce)
     print("sMsg = ", sMsg)
     if( ret!=0 ):
-       print("ERR: DecryptMsg ret: " + str(ret))
-       return
+        print("ERR: DecryptMsg ret: " + str(ret))
     else:
        decoded_dict = xmltodict.parse(sMsg)
        print(decoded_dict)
@@ -43,21 +42,19 @@ def process_task(task_data: dict):
 def consume_messages():
     """RabbitMQ 消费者线程"""
 
-    credentials = pika.PlainCredentials(
-      username=os.environ['RABBITMQ_USERNAME'],  # 替换为你的用户名
-      password=os.environ['RABBITMQ_PASSWORD']  # 替换为你的密码
-    )
+    credentials = pika.PlainCredentials(username=os.environ['RABBITMQ_USERNAME'], password=os.environ['RABBITMQ_PASSWORD'])
+
     connection = pika.BlockingConnection(pika.ConnectionParameters(os.environ['RABBITMQ_HOST'], os.environ['RABBITMQ_PORT'], credentials=credentials))
     channel = connection.channel()
-    
+
     # 声明持久化队列
     # channel.queue_declare(queue='hello_durable', durable=True)
     channel.queue_declare(queue='hello_durable', durable=True)
-    
+
     # 每次最多处理一条消息（避免过载）
     channel.basic_qos(prefetch_count=1)
-    
-    
+
+
     channel.basic_consume(queue='hello_durable', on_message_callback=callback_json)
     print(" [*] Waiting for tasks. To exit press CTRL+C")
     channel.start_consuming()
@@ -87,22 +84,3 @@ def callback(ch, method, properties, body):
 
 if __name__ == '__main__':
     consume_messages()
-    """
-    # 连接到 RabbitMQ
-    connection = pika.BlockingConnection(pika.ConnectionParameters('140.143.183.20'))
-    channel = connection.channel()
-
-    # 声明队列（确保存在）
-    channel.queue_declare(queue='hello_durable')
-
-    channel.basic_qos(prefetch_count=1)  # 控制并发量
-    # 订阅队列
-    channel.basic_consume(
-        queue='hello_durable',
-        auto_ack=False,  # 自动确认消息
-        on_message_callback=callback
-    )
-
-    print(' [*] Waiting for messages. Press CTRL+C to exit.')
-    channel.start_consuming()
-    """
