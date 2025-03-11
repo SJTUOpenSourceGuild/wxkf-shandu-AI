@@ -36,6 +36,20 @@
 配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。
 在配置回调过程中，填写的URL必须是https（不确定），配置方法见下问FastAPI相关
 
+
+#### 数据库
+
+用到了2种数据库，Redis和MySQL，因此需要设置相关环境变量
+
+* MYSQL_HOST
+* MYSQL_PORT
+* MYSQL_USERNAME
+* MYSQL_PASSWORD
+
+* REDIS_HOST
+* REDIS_PORT
+* REDIS_PASSWORD
+
 #### RabbitMQ
 
 另外服务使用了RabbitMQ消息队列，因此需要指定RabbitMQ服务器及用户密码
