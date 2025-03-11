@@ -6,38 +6,34 @@ import time
 import os
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
-from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser
+from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, getUserinfo
 
-def process_task(task_data: dict):
-    """模拟耗时任务处理（如调用模型、写入数据库）"""
-    print("task data = ",task_data)
-    # print(f"Processing task {task_data['id']}: {task_data['action']}")
-    # TODO: 实际业务逻辑
 
+def process_task(data: dict):
     sToken = os.environ['WECHAT_TOKEN']
     sEncodingAESKey = os.environ['WECHAT_AESKEY']
     sCorpID = os.environ['WECHAT_CORP_ID']
     wxcpt=WXBizJsonMsgCrypt(sToken,sEncodingAESKey,sCorpID)
 
-    sReqNonce = task_data['nonce']
-    sReqTimeStamp = task_data['timestamp']
-    sReqMsgSig = task_data['sign']
-
-    data_dict = xmltodict.parse(task_data['data'])
+    sReqNonce = data['nonce']
+    sReqTimeStamp = data['timestamp']
+    sReqMsgSig = data['sign']
+    data_dict = xmltodict.parse(data['data'])
 
     sReqData = json.dumps(data_dict["xml"])
+
     ret,sMsg=wxcpt.DecryptMsg( sReqData, sReqMsgSig, sReqTimeStamp, sReqNonce)
-    print("sMsg = ", sMsg)
     if( ret!=0 ):
         print("ERR: DecryptMsg ret: " + str(ret))
+        return False
     else:
        decoded_dict = xmltodict.parse(sMsg)
-       print(decoded_dict)
 
-       msgDict = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=sCorpID)
-       response = sendWechatMsgTouser(msgDict['msg_list'][-1]['external_userid'], msgDict['msg_list'][-1]['open_kfid'],msgDict['msg_list'][-1]['msgid'], msgDict['msg_list'][-1]['text']['content'],sCorpID=sCorpID)
-       print(response)
-    return {"status": "success", "result": "processed"}
+       msg_list = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=sCorpID)
+       for msg in msg_list:
+           response = getUserinfo([msg['external_userid']])
+           response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + response['customer_list'][0]['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
+       return True
 
 def consume_messages():
     """RabbitMQ 消费者线程"""
@@ -63,24 +59,18 @@ def callback_json(ch, method, properties, body):
     try:
         task_data = json.loads(body.decode())
         result = process_task(task_data)
-        # TODO: 存储处理结果（如写入数据库）
-        print(result)
-        ch.basic_ack(delivery_tag=method.delivery_tag)  # 手动确认
+        if result:
+            # 处理成功时才确认
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+        else:
+            """
+            处理失败时拒绝并丢弃
+            TODO: 本来想重新入队的，但发现重新入队后会马上被重新获取，可能出现一只循环处理同一个数据的问题，导致占用大量计算资源
+            """
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
     except Exception as e:
-        print(f"Error processing task: {e}")
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)  # 拒绝并丢弃
-
-
-def process_message(body):
-    time.sleep(1)
-    # 模拟耗时操作（如数据库写入）
-    print(f" [x] Received: {body.decode()}")
-    # TODO: 实际业务逻辑
-
-def callback(ch, method, properties, body):
-    threading.Thread(target=process_message, args=(body,)).start()
-    ch.basic_ack(delivery_tag=method.delivery_tag)  # 手动确认
-
+        print(f"Error processing task: ", e)
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
 if __name__ == '__main__':
     consume_messages()

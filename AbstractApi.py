@@ -17,7 +17,7 @@ import re
 import json
 import requests
 
-DEBUG = True
+DEBUG = False
 
 class ApiException(Exception) :
     def __init__(self, errCode, errMsg) :
