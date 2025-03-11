@@ -3,3 +3,4 @@ xmltodict
 pycryptodome
 pika
 requests
+redis
