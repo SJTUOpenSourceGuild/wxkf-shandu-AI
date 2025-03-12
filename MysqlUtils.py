@@ -2,6 +2,8 @@ import atexit
 import signal
 import pymysql
 import os
+import uuid
+import datetime
 
 class mysqlOps:
     """
@@ -152,7 +154,7 @@ class mysqlOps:
             res.append(column[0])
         return res
 
-    def create_table(self,name, columns, foreign_key=None, unique_list=None):
+    def create_table(self,name, columns, table_comment = "",foreign_key=None, unique_list=None):
         """新建表
 
         Args:
@@ -168,6 +170,7 @@ class mysqlOps:
                        第2个元素表示外键对应的表格名
                        第3个元素表示外键对应的表格中的column名
                        例如: ["foreight_id", "other_table", "id"]
+                       {"foreign_id":"表中外键id", "foreign_table":"外键table", "foreign_table_id":"外键对应的id", "postfix":["ON DELETE CASCADE"]}
           unique: list，每个元素是columns中的列
 
         Returns:
@@ -191,16 +194,22 @@ class mysqlOps:
             sql += ","
         sql = sql[:-1] # 删除最后一个逗号
         if foreign_key:
-            sql += ", FOREIGN KEY ( " + foreign_key[0] + " ) REFERENCES " + foreign_key[1] + "(" + foreign_key[2] + ")"
+            sql += ", FOREIGN KEY ( " + foreign_key["foreign_id"] + " ) REFERENCES " + foreign_key["foreign_table"] + "(" + foreign_key["foreign_table_id"] + ")"
+            if 'postfix' in foreign_key:
+                for pf in foreign_key['postfix']:
+                    sql += " " + pf
 
         if unique_list and len(unique_list) > 0:
-            sql += ", UNIQUE("
             for unique_item in unique_list:
-                sql += unique_item + ","
-            sql = sql[:-1] # 删除最后一个逗号
-            sql += ")"
+                sql += ", UNIQUE("
+                sql += unique_item + ")"
+            #sql = sql[:-1] # 删除最后一个逗号
         sql += ")"
+        sql += "CHARSET=utf8mb4"
+        if len(table_comment) > 0:
+            sql += " COMMENT='" + table_comment + "'"
 
+        print(sql)
         try:
             res = self.excute_cmd(sql)
         except Exception as e:
@@ -299,7 +308,8 @@ class mysqlOps:
         except Exception as e:
             return False, str(e)
         else:
-            return True, str(res)
+            res = self.excute_cmd("SELECT LAST_INSERT_ID() AS new_id")
+            return True, str(res[0][0])
 
     def query(self, table_name, col_names = None, filter_condition = None, limit = None, offset = None):
         """
@@ -372,6 +382,15 @@ class mysqlOps:
         else:
             return True, str(res)
 
+    def delete_table(self, table_name):
+        sql = "DROP TABLE IF EXISTS " + table_name + ";"
+        try:
+            res = self.excute_cmd(sql)
+        except Exception as e:
+            return False, str(e)
+        else:
+            return True, str(res)
+
     def delete(self, table_name, filter_condition):
         """
         删除数据项
@@ -420,7 +439,99 @@ class mysqlOps:
         else:
             return True, int(res[0][0])
 
+def createRequiredTable():
+    mysql = mysqlOps()
+    user_table_name = "users"
+    msg_table_name = "msg_from_wechat"
+    text_msg_table_name = "text_msg"
+    user_profile_table_name = "user_profile"
+
+    if not mysql.is_database_exist("wechat_db"):
+        mysql.create_database('wechat_db')
+
+    mysql.select_database('wechat_db')
+
+    res, msg = mysql.delete_table(text_msg_table_name)
+    res, msg = mysql.delete_table(msg_table_name)
+    res, msg = mysql.delete_table(user_table_name)
+
+    # 用户主表
+    res, msg = mysql.create_table(user_table_name, [
+        {"name":"id", "type":"BIGINT", "comment":"自增主键", "postfix":["UNSIGNED", "AUTO_INCREMENT","PRIMARY KEY"]},
+        {"name":"uid", "type":"VARCHAR(32)", "comment":"全局唯一用户ID（业务层使用，如uuid）", "postfix":["NOT NULL"]},
+        {"name":"union_id", "type":"VARCHAR(128)", "comment":"微信开放平台UnionID（跨应用唯一）"},
+        {"name":"created_at", "type":"DATETIME", "comment":"注册时间", "postfix":["DEFAULT CURRENT_TIMESTAMP"]},
+        {"name":"update_at", "type":"DATETIME", "comment":"最近更新事件", "postfix":["DEFAULT CURRENT_TIMESTAMP","ON UPDATE CURRENT_TIMESTAMP"]},
+        {"name":"status", "type":"TINYINT", "comment":"状态（0=禁用，1=正常，2=未激活）", "postfix":["DEFAULT 2"]},
+        ],
+        "用户主表",
+        None,['uid', 'union_id'])
+
+    # 微信消息主表
+    res, msg = mysql.create_table(msg_table_name, [
+        {"name":"id", "type":"BIGINT", "comment":"自增主键", "postfix":["UNSIGNED", "AUTO_INCREMENT","PRIMARY KEY"]},
+        {"name":"msg_id", "type":"VARCHAR(50)", "comment":"微信消息唯一ID", "postfix":["NOT NULL"]},
+        {"name":"msg_type", "type":"VARCHAR(20)", "comment":"消息类型（text/image/voice/event/...）", "postfix":["NOT NULL"]},
+        {"name":"user_union_id", "type":"VARCHAR(128)", "comment":"发送方账号（Union ID）", "postfix":["NOT NULL"]},
+        {"name":"open_kfid", "type":"VARCHAR(32)", "comment":"接收方账号", "postfix":["NOT NULL"]},
+        {"name":"send_time", "type":"DATETIME", "comment":"消息创建时间（微信服务器时间戳）", "postfix":["NOT NULL"]},
+        {"name":"origin_data", "type":"TEXT", "comment":"原始XML/JSON数据（调试用）"},
+        ],
+        "微信消息主表",
+        {"foreign_id": "user_union_id","foreign_table":user_table_name,"foreign_table_id":"union_id","postfix":["ON DELETE CASCADE"]},['msg_id'])
+    print(msg)
+
+    res, msg = mysql.create_table(text_msg_table_name, [
+        {"name":"msg_id", "type":"VARCHAR(50)", "comment":"关联主表msg_id", "postfix":["PRIMARY KEY"]},
+        {"name":"content", "type":"TEXT", "comment":"文本内容", "postfix":["NOT NULL"]},
+        ],
+        "文本消息表",
+        {"foreign_id": "msg_id","foreign_table":msg_table_name,"foreign_table_id":"msg_id","postfix":["ON DELETE CASCADE"]},None)
+    res, msg = mysql.create_table(user_profile_table_name, [
+        {"name":"user_id", "type":"BIGINT", "postfix":["UNSIGNED","PRIMARY KEY"]},
+        {"name":"nickname", "type":"VARCHAR(64)", "comment":"昵称"},
+        {"name":"avatar", "type":"VARCHAR(512)", "comment":"头像url"},
+        {"name":"gender", "type":"TINYINT", "comment":"性别（0=未知，1=男，2=女）"},
+        {"name":"birthday", "type":"DATE", "comment":"生日"},
+        {"name":"extras", "type":"TEXT", "comment":"扩展字段（如地址、兴趣标签等）"},
+        ],
+        "用户资料表",
+        {"foreign_id": "user_id","foreign_table":user_table_name,"foreign_table_id":"id","postfix":["ON DELETE CASCADE"]},None)
+
+def test_insert():
+    mysql = mysqlOps()
+    user_table_name = "users"
+    msg_table_name = "msg_from_wechat"
+    text_msg_table_name = "text_msg"
+    user_profile_table_name = "user_profile"
+
+    if not mysql.is_database_exist("wechat_db"):
+        mysql.create_database('wechat_db')
+
+    mysql.select_database('wechat_db')
+    uid = str(uuid.uuid4()).replace("-", "")[:32]
+    union_id = str(uuid.uuid4()).replace("-", "")[:32]
+
+    res, msg = mysql.insert(user_table_name,{"uid":uid, "union_id":union_id})
+    if not res:
+        print("insert " + user_table_name + " failed!")
+    print("new user id = ",msg)
+
+    msg_id = str(uuid.uuid4()).replace("-", "")[:32]
+    res, msg = mysql.insert(msg_table_name,{"msg_id": msg_id, "msg_type":"text", "user_union_id":union_id, "open_kfid":"123","send_time":datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
+    if not res:
+        print("insert " + user_table_name + " failed!")
+    print("new msg id = ",msg)
+    res, msg = mysql.insert(text_msg_table_name,{"msg_id": msg_id, "content":"content"})
+    if not res:
+        print("insert " + user_table_name + " failed!")
+    print("new text msg id = ",msg)
+
+
 if __name__ == '__main__':
+    test_insert()
+    #createRequiredTable()
+    """
     mysql = mysqlOps()
     print(mysql.get_databases())
     print(mysql.create_database("quant_test"))
@@ -429,17 +540,14 @@ if __name__ == '__main__':
 
     res, msg = mysql.create_table("table_name3",
             [{"name":"name1", "type":"CHAR(20)", 'comment':"名称"},{"name":"name2", "type":"INT"}])
-    """
     res, msg = mysql.create_table("table_name2",
                  [{"name":"name1", "type":"CHAR(20)", "postfix":["PRIMARY KEY"]},{"name":"name2", "type":"INT"}])
-    """
     if res:
         print("create table succeed")
     else:
         print("create table fail")
         print(msg)
 
-    """
     res, msg = mysql.insert("table_name",{"name1":"12", "name2":2})
     if res:
         print("succeed")
@@ -470,6 +578,4 @@ if __name__ == '__main__':
         print("succeed")
         print(msg)
     else:
-        print("failed")
-        print(msg)
     """
