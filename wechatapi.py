@@ -5,6 +5,7 @@ WECHAT_API_TYPE = {
         'GET_ACCESS_TOKEN' : ['/cgi-bin/gettoken', 'GET'],
         'SYNC_MSG' : ['/cgi-bin/kf/sync_msg?access_token=ACCESS_TOKEN', 'POST'],
         'SEND_MSG' : ['/cgi-bin/kf/send_msg?access_token=ACCESS_TOKEN', 'POST'],
+        'SEND_MSG_ON_EVENT' : ['/cgi-bin/kf/send_msg_on_event?access_token=ACCESS_TOKEN', 'POST'],
         'GET_USER_INFO': ['/cgi-bin/kf/customer/batchget?access_token=ACCESS_TOKEN', 'POST'],
         'UPLOAD_FILE' : ['/cgi-bin/media/upload?access_token=ACCESS_TOKEN&type=TYPE', 'POST'],
 }
@@ -89,6 +90,22 @@ def sendWechatMsgTouser(external_userid, open_kf_id, msgid, msg, msg_type = 'tex
         {
             "touser" : external_userid,
             "open_kfid": open_kf_id,
+            "msgid": msgid,
+            "msgtype" : msg_type,
+            "text" : {
+                "content" : msg
+            }
+        }
+    )
+    return response
+
+def sendWechatMsgTouserOnEvent(code, msgid, msg, msg_type = 'text',
+                        sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
+    api = WechatApi(sCorpID, secret=secret)
+    response = api.httpCall(
+        WECHAT_API_TYPE['SEND_MSG_ON_EVENT'],
+        {
+            "code": code,
             "msgid": msgid,
             "msgtype" : msg_type,
             "text" : {
