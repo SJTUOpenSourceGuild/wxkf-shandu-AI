@@ -8,6 +8,32 @@ import uuid
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
 from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
+from MysqlUtils import *
+
+def save_user_to_db(customer_info):
+    # 如果表中没有用户数据，先保存用户数据
+    mysql = mysqlOps()
+    user_table_name = "users"
+    user_profile_table_name = "user_profile"
+
+    if not mysql.is_database_exist("wechat_db"):
+        mysql.create_database('wechat_db')
+    mysql.select_database('wechat_db')
+
+    uid = str(uuid.uuid4()).replace("-", "")[:32]
+    if 'unionid' in customer_info:
+        res, new_id = mysql.insert(user_table_name,{"uid":uid, "union_id":customer_info['unionid']})
+    else: # 绑定认证过的公众号 or 小程序后才能获得union id，否则结果中没有union id
+        # 测试用
+        res, new_id = mysql.insert(user_table_name,{"uid":uid, "union_id":str(uuid.uuid4()).replace("-", "")[:32]})
+    if not res:
+        print("insert " + user_table_name + " failed!")
+
+
+    #同时插入profile信息
+    res, new_user_profile_id = mysql.insert(user_profile_table_name,{"user_id":new_id, "nickname":customer_info['nickname'], "avatar":customer_info['avatar'], "gender":customer_info['gender']})
+    if not res:
+        print("insert " + user_profile_table_name + " failed!")
 
 
 def process_task(data: dict):
@@ -35,6 +61,8 @@ def process_task(data: dict):
             if msg['msgtype'] == 'text':
                 response = getUserinfo([msg['external_userid']])
                 customer_info = response['customer_list'][0]
+                save_user_to_db(customer_info)
+
                 response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
             elif msg['msgtype'] == 'event':
                 response = getUserinfo([msg['event']['external_userid']])
