@@ -159,8 +159,10 @@ class mysqlOps:
           name: String，表名
           columns: list, 表的字段列表
                     其中每一项是字典，其中必须包含字段'name'和'type'，表示字段名和字段数据类型。
-                    可选字段'postfix'，该字段对应list，当该字段存在时，list中每一项都会被追加到这个字段后，
-                    比如'postfix':['NOT NULL', 'AUTO_INCREMENT', 'PRIMARY KEY']
+                    可选字段:
+                      'comment', 对字段的描述
+                      'postfix'，该字段对应list，当该字段存在时，list中每一项都会被追加到这个字段后，
+                      比如'postfix':['NOT NULL', 'AUTO_INCREMENT', 'PRIMARY KEY']
           foreign_key: 长度为3的list，可选，执行表的外键。
                        第1个元素表示外键在本表内对应的column名，比如在参数columns中
                        第2个元素表示外键对应的表格名
@@ -184,6 +186,8 @@ class mysqlOps:
             if 'postfix' in column:
                 for pf in column['postfix']:
                     sql += pf + " "
+            if 'comment' in column and len(column['comment']) > 0:
+                sql += " COMMENT '" + column['comment'] + "' "
             sql += ","
         sql = sql[:-1] # 删除最后一个逗号
         if foreign_key:
@@ -422,11 +426,9 @@ if __name__ == '__main__':
     print(mysql.create_database("quant_test"))
     mysql.select_database("quant_test")
     print(mysql.get_tables())
-    print(mysql.is_database_exist("quant_test"))
 
     res, msg = mysql.create_table("table_name3",
-                 [{"name":"name1", "type":"CHAR(20)"},{"name":"name2", "type":"INT"}],
-                 ["name1", "table_name2", "name1"])
+            [{"name":"name1", "type":"CHAR(20)", 'comment':"名称"},{"name":"name2", "type":"INT"}])
     """
     res, msg = mysql.create_table("table_name2",
                  [{"name":"name1", "type":"CHAR(20)", "postfix":["PRIMARY KEY"]},{"name":"name2", "type":"INT"}])
