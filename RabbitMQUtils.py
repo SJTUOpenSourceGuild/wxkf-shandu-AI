@@ -4,9 +4,10 @@ import threading
 import json
 import time
 import os
+import uuid
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
-from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, getUserinfo
+from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
 
 
 def process_task(data: dict):
@@ -27,13 +28,35 @@ def process_task(data: dict):
         print("ERR: DecryptMsg ret: " + str(ret))
         return False
     else:
-       decoded_dict = xmltodict.parse(sMsg)
+        decoded_dict = xmltodict.parse(sMsg)
 
-       msg_list = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=sCorpID)
-       for msg in msg_list:
-           response = getUserinfo([msg['external_userid']])
-           response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + response['customer_list'][0]['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
-       return True
+        msg_list = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=sCorpID)
+        for msg in msg_list:
+            if msg['msgtype'] == 'text':
+                response = getUserinfo([msg['external_userid']])
+                customer_info = response['customer_list'][0]
+                response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
+            elif msg['msgtype'] == 'event':
+                response = getUserinfo([msg['event']['external_userid']])
+                customer_info = response['customer_list'][0]
+                # 事件
+                if msg['event']['event_type'] == 'enter_session':
+                    # 进入会话
+                    response = sendWechatMsgTouserOnEvent(msg['event']['welcome_code'],str(uuid.uuid4()).replace("-", "")[:32], "你叫：" + customer_info['nickname'] +"，欢迎光临",sCorpID=sCorpID)
+                elif msg['event']['event_type'] == 'user_recall_msg':
+                    # 撤回消息
+                    response = sendWechatMsgTouser(msg['event']['external_userid'], msg['event']['open_kfid'],str(uuid.uuid4()).replace("-", "")[:32], customer_info['nickname'] +"，你刚刚发送了什么？我没看见。",sCorpID=sCorpID)
+                elif msg['event']['event_type'] == 'msg_send_fail':
+                    # 消息发送失败
+                    pass
+            else:
+               print("不支持消息: ", msg)
+               response = getUserinfo([msg['external_userid']])
+               customer_info = response['customer_list'][0]
+               # 暂不支持
+               response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],str(uuid.uuid4()).replace("-", "")[:32], customer_info['nickname'] +"，此消息类型暂不支持。",sCorpID=sCorpID)
+
+        return True
 
 def consume_messages():
     """RabbitMQ 消费者线程"""
