@@ -92,34 +92,28 @@ ret,sEchoStr=wxcpt.VerifyURL(sVerifyMsgSig, sVerifyTimeStamp,sVerifyNonce,sVerif
 
 ## TODO
 
-目前只是完成了最基础的一些功能：
-
-* 回调配置
-* 获取消息
-* 发送消息
-
-利用上述功能可以简单完成微信客服配置以及用户发送消息是自动回复的功能。但过程中经常会发生错误，例如：
-
-* 如果回调是由时间（而非消息）触发的，比如*用户进入会话事件*，就会导致程序退出
+目前完成了从RabbitMQ数据库接受微信消息，然后做简单处理。
+也完成了对发送客服消息的用户数据的保存，文本消息的保存
 
 后续还有许多工作需要做：
 
-* 增强服务的健壮性
-* 完成`UPLOAD_FILE`的HTTP请求（改请求与其它请求的差别在于，链接中需要指定TYPE，目前设计无法指定TYPE）
-* 完成[欢迎语](https://kf.weixin.qq.com/api/doc/path/95123)的发送
+- [x] 增强服务的健壮性
+- [x] 完成[欢迎语](https://kf.weixin.qq.com/api/doc/path/95123)的发送
 * 增加对用户发送的各类消息进行解析，包括：
-    * 文本
-        * 如果是url，则爬去其中内容 
-    * 图片
-    * 语音
-    * 视频
-    * 文件
-        * 如果是PDF文件
-    * 聊天记录
+    - [x] 文本
+    - [ ] 如果是url，则爬去其中内容 
+    - [ ] 公众号文章
+    - [ ] 图片
+    - [ ] 语音
+    - [ ] 视频
+    - [ ] 文件
+        - [ ] 如果是PDF文件
+    - [ ] 聊天记录
+* 完成`UPLOAD_FILE`的HTTP请求（改请求与其它请求的差别在于，链接中需要指定TYPE，目前设计无法指定TYPE）
 
 除此之外，还有：
 
-* 接入数据库（需先完成数据库设计）
+- [x] 接入数据库（需先完成数据库设计）
 * 接入DeepSeek（可以选择豆包或DeepSeek官方）
 * 接入RAG，可以参考如下项目：
     * [LangChain](https://github.com/langchain-ai/langchain)
