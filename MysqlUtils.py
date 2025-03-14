@@ -459,13 +459,15 @@ def createRequiredTable():
     res, msg = mysql.create_table(user_table_name, [
         {"name":"id", "type":"BIGINT", "comment":"自增主键", "postfix":["UNSIGNED", "AUTO_INCREMENT","PRIMARY KEY"]},
         {"name":"uid", "type":"VARCHAR(32)", "comment":"全局唯一用户ID（业务层使用，如uuid）", "postfix":["NOT NULL"]},
+        {"name":"open_id", "type":"VARCHAR(128)", "comment":"微信小程序中用户身份的唯一标识，与微信小程序的appid永久绑定"},
         {"name":"union_id", "type":"VARCHAR(128)", "comment":"微信开放平台UnionID（跨应用唯一）"},
+        {"name":"platform", "type":"VARCHAR(20)", "comment":"用户注册平台"},
         {"name":"created_at", "type":"DATETIME", "comment":"注册时间", "postfix":["DEFAULT CURRENT_TIMESTAMP"]},
         {"name":"update_at", "type":"DATETIME", "comment":"最近更新事件", "postfix":["DEFAULT CURRENT_TIMESTAMP","ON UPDATE CURRENT_TIMESTAMP"]},
         {"name":"status", "type":"TINYINT", "comment":"状态（0=禁用，1=正常，2=未激活）", "postfix":["DEFAULT 2"]},
         ],
         "用户主表",
-        None,['uid', 'union_id'])
+        None,['uid','open_id', 'union_id'])
 
     # 微信消息主表
     res, msg = mysql.create_table(msg_table_name, [
@@ -491,7 +493,7 @@ def createRequiredTable():
         {"name":"user_id", "type":"BIGINT", "postfix":["UNSIGNED","PRIMARY KEY"]},
         {"name":"nickname", "type":"VARCHAR(64)", "comment":"昵称"},
         {"name":"avatar", "type":"VARCHAR(512)", "comment":"头像url"},
-        {"name":"gender", "type":"TINYINT", "comment":"性别（0=未知，1=男，2=女）"},
+        {"name":"gender", "type":"TINYINT", "comment":"性别（0=未知，1=男，2=女）", "postfix":["DEFAULT 0"]},
         {"name":"birthday", "type":"DATE", "comment":"生日"},
         {"name":"extras", "type":"TEXT", "comment":"扩展字段（如地址、兴趣标签等）"},
         ],
@@ -529,8 +531,8 @@ def test_insert():
 
 
 if __name__ == '__main__':
-    test_insert()
-    #createRequiredTable()
+    #test_insert()
+    createRequiredTable()
     """
     mysql = mysqlOps()
     print(mysql.get_databases())
