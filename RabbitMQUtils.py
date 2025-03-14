@@ -9,12 +9,15 @@ from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
 from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
 from MysqlUtils import *
+import datetime
 
 def save_user_to_db(customer_info):
     # 如果表中没有用户数据，先保存用户数据
     mysql = mysqlOps()
     user_table_name = "users"
     user_profile_table_name = "user_profile"
+    msg_table_name = "msg_from_wechat"
+    text_msg_table_name = "text_msg"
 
     if not mysql.is_database_exist("wechat_db"):
         mysql.create_database('wechat_db')
@@ -34,6 +37,24 @@ def save_user_to_db(customer_info):
     res, new_user_profile_id = mysql.insert(user_profile_table_name,{"user_id":new_id, "nickname":customer_info['nickname'], "avatar":customer_info['avatar'], "gender":customer_info['gender']})
     if not res:
         print("insert " + user_profile_table_name + " failed!")
+
+def saveWechatMsg(userinfo,msg):
+    mysql = mysqlOps()
+    user_table_name = "users"
+    user_profile_table_name = "user_profile"
+    msg_table_name = "msg_from_wechat"
+    text_msg_table_name = "text_msg"
+
+    if not mysql.is_database_exist("wechat_db"):
+        mysql.create_database('wechat_db')
+    if not 'unionid' in userinfo:
+        print("没有unionid，消息无效，无法正常保存")
+        return
+    mysql.select_database('wechat_db')
+    if msg['msgtype'] == 'text':
+        res, new_msg_id = mysql.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
+        res, new_text_msg_id = mysql.insert(text_msg_table_name,{"msg_id":msg["msgid"],"content":msg['text']['content']})
+    pass
 
 
 def process_task(data: dict):
@@ -62,6 +83,7 @@ def process_task(data: dict):
                 response = getUserinfo([msg['external_userid']])
                 customer_info = response['customer_list'][0]
                 save_user_to_db(customer_info)
+                saveWechatMsg(customer_info, msg)
 
                 response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
             elif msg['msgtype'] == 'event':
