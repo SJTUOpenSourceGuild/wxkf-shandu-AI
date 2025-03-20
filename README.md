@@ -36,6 +36,10 @@
 配置回调完成后（具体配置方法见下文），就可以获得Secret了，设置为WECHAT_SECRET环境变量。
 在配置回调过程中，填写的URL必须是https（不确定），配置方法见下问FastAPI相关
 
+#### 大语言模型
+这里使用腾讯云的LKE，在LKE创建AI APP获取APP KEY方便调用
+
+* BOT_APP_KEY
 
 #### 数据库
 
@@ -73,6 +77,7 @@ WECHAT_FASTAPI_PORT是FastAPI监听的端口，比如8080
 SSL_KEYFILE_PATH和SSL_CERTIFILE_PATH是用来设置为HTTPS访问FastAPI服务，
 
 因此需要域名和SSL证书。将环境变量SSL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SSL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
+
 
 ### 微信客服的回调配置
 
