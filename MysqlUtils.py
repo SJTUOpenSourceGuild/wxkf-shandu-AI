@@ -209,7 +209,6 @@ class mysqlOps:
         if len(table_comment) > 0:
             sql += " COMMENT='" + table_comment + "'"
 
-        print(sql)
         try:
             res = self.excute_cmd(sql)
         except Exception as e:
@@ -282,32 +281,26 @@ class mysqlOps:
         """
         if len(kv_dict) == 0:
             return False, "插入内容为空"
+
         sql = "INSERT INTO "
         sql += table_name + "("
         for k,v in kv_dict.items():
-            if isinstance(v, str):
-                if len(v) > 0:
-                    sql += k + ","
-            else:
-                sql += k + ","
+            sql += k + ","
 
         sql = sql[:-1] # 删除最后一个逗号
         sql += ") VALUES ("
 
         for k,v in kv_dict.items():
-            if isinstance(v, str):
-                if len(v) > 0:
-                    sql += "'" + v + "',"
-            else:
-                sql += str(v) + ","
+            sql += "%(" + k + ")s,"
 
-        sql = sql[:-1]
+        sql = sql[:-1] # 删除最后一个逗号
         sql += ")"
-        try:
-            res = self.excute_cmd(sql)
-        except Exception as e:
-            return False, str(e)
-        else:
+
+        with self.db.cursor() as cursor:
+            try:
+                cursor.execute(sql, kv_dict)
+            except Exception as e:
+                return False, str(e)
             res = self.excute_cmd("SELECT LAST_INSERT_ID() AS new_id")
             return True, str(res[0][0])
 
@@ -481,7 +474,6 @@ def createRequiredTable():
         ],
         "微信消息主表",
         {"foreign_id": "user_union_id","foreign_table":user_table_name,"foreign_table_id":"union_id","postfix":["ON DELETE CASCADE"]},['msg_id'])
-    print(msg)
 
     res, msg = mysql.create_table(text_msg_table_name, [
         {"name":"msg_id", "type":"VARCHAR(50)", "comment":"关联主表msg_id", "postfix":["PRIMARY KEY"]},
