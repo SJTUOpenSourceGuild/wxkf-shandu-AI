@@ -9,6 +9,10 @@ from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
 from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
 from MysqlUtils import *
+from wechatCrawler import getWechatArticalContentWithImageLink
+from utils import is_url
+from urlCrawler import fetch_and_parse
+from wechatLKERequest import askAI
 import datetime
 
 def save_user_to_db(customer_info):
@@ -38,7 +42,7 @@ def save_user_to_db(customer_info):
     if not res:
         print("insert " + user_profile_table_name + " failed!")
 
-def saveWechatMsg(userinfo,msg):
+def saveWechatTextMsg(userinfo,msg):
     mysql = mysqlOps()
     user_table_name = "users"
     user_profile_table_name = "user_profile"
@@ -53,8 +57,30 @@ def saveWechatMsg(userinfo,msg):
     mysql.select_database('wechat_db')
     if msg['msgtype'] == 'text':
         res, new_msg_id = mysql.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
+
         res, new_text_msg_id = mysql.insert(text_msg_table_name,{"msg_id":msg["msgid"],"content":msg['text']['content']})
-    pass
+
+def saveWechatLinkMsg(userinfo,msg):
+    mysql = mysqlOps()
+    user_table_name = "users"
+    user_profile_table_name = "user_profile"
+    msg_table_name = "msg_from_wechat"
+    link_msg_table_name = "link_msg"
+
+    if not mysql.is_database_exist("wechat_db"):
+        mysql.create_database('wechat_db')
+    if not 'unionid' in userinfo:
+        print("没有unionid，消息无效，无法正常保存")
+        return
+    mysql.select_database('wechat_db')
+    if msg['msgtype'] == 'link':
+        res, new_msg_id = mysql.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
+        html = getWechatArticalContentWithImageLink(msg['link']['url'])
+        parsed_content = html.get_text(strip=True, separator='\n')
+        res, new_text_msg_id = mysql.insert(link_msg_table_name,{"msg_id":msg["msgid"],"title":msg['link']['title'], "cover_url":msg['link']['pic_url'], "description":msg['link']['desc'], "url":msg['link']['url'], "html":str(html), "parsed_content":parsed_content})
+        if not res:
+            print("insert failed!", new_text_msg_id)
+        return parsed_content
 
 
 def process_task(data: dict):
@@ -79,13 +105,25 @@ def process_task(data: dict):
 
         msg_list = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=sCorpID)
         for msg in msg_list:
+            print(msg)
             if msg['msgtype'] == 'text':
                 response = getUserinfo([msg['external_userid']])
                 customer_info = response['customer_list'][0]
                 save_user_to_db(customer_info)
-                saveWechatMsg(customer_info, msg)
-
-                response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
+                saveWechatTextMsg(customer_info, msg)
+                if is_url(msg['text']['content']):
+                    html =fetch_and_parse(msg['text']['content'])
+                    response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了一个网址：" + html.title.text,sCorpID=sCorpID)
+                else:
+                    response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=sCorpID)
+            elif msg['msgtype'] == 'link':
+                # 链接
+                response = getUserinfo([msg['external_userid']])
+                customer_info = response['customer_list'][0]
+                save_user_to_db(customer_info)
+                parsed_content = saveWechatLinkMsg(customer_info, msg)
+                ai_answer = askAI(parsed_content)
+                response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "《" + msg['link']['title'] +"》：\n" + ai_answer)
             elif msg['msgtype'] == 'event':
                 response = getUserinfo([msg['event']['external_userid']])
                 customer_info = response['customer_list'][0]
@@ -113,7 +151,7 @@ def consume_messages():
 
     credentials = pika.PlainCredentials(username=os.environ['RABBITMQ_USERNAME'], password=os.environ['RABBITMQ_PASSWORD'])
 
-    connection = pika.BlockingConnection(pika.ConnectionParameters(os.environ['RABBITMQ_HOST'], os.environ['RABBITMQ_PORT'], credentials=credentials))
+    connection = pika.BlockingConnection(pika.ConnectionParameters(os.environ['RABBITMQ_HOST'], os.environ['RABBITMQ_PORT'], credentials=credentials, heartbeat=30))
     channel = connection.channel()
 
     # 声明持久化队列
@@ -121,7 +159,7 @@ def consume_messages():
     channel.queue_declare(queue='hello_durable', durable=True)
 
     # 每次最多处理一条消息（避免过载）
-    channel.basic_qos(prefetch_count=1)
+    channel.basic_qos(prefetch_count=2)
 
 
     channel.basic_consume(queue='hello_durable', on_message_callback=callback_json)
