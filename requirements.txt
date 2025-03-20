@@ -6,3 +6,4 @@ requests
 redis
 pymysql
 cryptography
+sseclient-py
