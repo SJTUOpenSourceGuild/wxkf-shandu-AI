@@ -53,16 +53,19 @@ def getWechatArticalContentWithImageLink(url):
     res = {}
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        title = soup.find('h1', class_='rich_media_title')
+        page_content_html = soup.find('div', id="page-content")
+        if page_content_html:
+            res["content_html"] = page_content_html
+
+        title = page_content_html.find('h1', class_='rich_media_title')
         if title:
             res["title"] = title.get_text(strip=True, separator="\n")
 
-        content_html = soup.find('div', class_='rich_media_content')
+        content_html = page_content_html.find('div', class_='rich_media_content')
         if content_html:
-            res["content_html"] = content_html
             res["parsed_content"] = content_html.get_text(strip=True, separator='\n')
 
-        infoDiv = soup.find('div', class_="rich_media_meta_list")
+        infoDiv = page_content_html.find('div', class_="rich_media_meta_list")
 
         author = infoDiv.find('span', class_='rich_media_meta rich_media_meta_text')
         if author:
