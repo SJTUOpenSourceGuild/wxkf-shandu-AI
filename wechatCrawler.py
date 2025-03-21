@@ -3,6 +3,11 @@ from bs4 import BeautifulSoup, Comment
 from urllib.parse import urljoin
 import os
 
+"""
+@Params:
+   * html: 输入时response = requests.get(url, headers=headers),response.text
+   * article_url: 公众号文章的url
+"""
 def replace_img_with_link(html, article_url):
     soup = BeautifulSoup(html, 'html.parser')
     
@@ -31,19 +36,46 @@ def replace_img_with_link(html, article_url):
     
     return content_div.get_text(strip=False, separator='\n')
 
+
+"""
+获取指定url的公众号文章信息
+@Params:
+    * url: 微信公众号文章地址
+@Returns:
+    * error_code: 0表示获取成功，否则表示获取失败
+    * { author: 文章作者, publish_time: 发布时间, content_html: 文章内容部分的html, parsed_content: 解析后的文章内容}
+"""
 def getWechatArticalContentWithImageLink(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
     response = requests.get(url, headers=headers)
+    res = {}
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
-        return soup.find('div', class_='rich_media_content')
-        processed_text = replace_img_with_link(response.text, url)
-        print(processed_text)
+        title = soup.find('h1', class_='rich_media_title')
+        if title:
+            res["title"] = title.get_text(strip=True, separator="\n")
+
+        content_html = soup.find('div', class_='rich_media_content')
+        if content_html:
+            res["content_html"] = content_html
+            res["parsed_content"] = content_html.get_text(strip=True, separator='\n')
+
+        infoDiv = soup.find('div', class_="rich_media_meta_list")
+
+        author = infoDiv.find('span', class_='rich_media_meta rich_media_meta_text')
+        if author:
+            res["author"]  = author.get_text(strip=True, separator="\n")
+
+        nickname_span = infoDiv.find('span', class_='rich_media_meta rich_media_meta_nickname')
+        nickname = nickname_span.find("a")
+        if nickname:
+            res["nickname"] = nickname.get_text(strip=True, separator="\n")
+        return 0, res
+        
     else:
-        print("请求失败，状态码：", response.status_code)
-        return ""
+        return -1, res
 
 def downloadImages(soup):
     images = soup.find_all('img', class_='rich_pages')  # 注意：类名可能变化！
@@ -93,5 +125,6 @@ url = 'http://mp.weixin.qq.com/s?__biz=Mzk0MjYwOTQxNg==&mid=2247486729&idx=1&sn=
 url2 = "https://blog.csdn.net/luolinyin/article/details/121424135"
 
 if __name__ == "__main__":
-    getWechatArticalContentWithImageLink(url2)
+    err_code, res = getWechatArticalContentWithImageLink(url)
+    print(res)
 
