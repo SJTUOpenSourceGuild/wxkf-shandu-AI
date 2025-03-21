@@ -5,7 +5,7 @@ import os
 import uuid
 import datetime
 
-class mysqlOps:
+class MysqlOpsBasic:
     """
     将SQL语句保存一些接口，方便使用。
 
