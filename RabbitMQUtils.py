@@ -117,10 +117,26 @@ class wechatKefuConsumer:
 
         customer_info = customer_list[0]
         wechat_db_ops = WechatMysqlOps()
-        wechat_db_ops.save_user_to_db(customer_info)
-        parsed_content = wechat_db_ops.saveWechatLinkMsg(customer_info, msg)
-        ai_answer = askAI(parsed_content)
-        response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "《" + msg['link']['title'] +"》：\n" + ai_answer)
+        try:
+            wechat_db_ops.save_user_to_db(customer_info)
+        except Exception as e:
+            logger.error("save_user_to_db failed")
+
+        try:
+            parsed_content = wechat_db_ops.saveWechatArticalMsg(customer_info, msg)
+        except Exception as e:
+            logger.error("saveWechatArticalMsg failed")
+
+
+        try:
+            ai_answer = askAI(parsed_content)
+        except Exception as e:
+            logger.error("askAI failed!")
+
+        try:
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "《" + msg['link']['title'] +"》：\n" + ai_answer)
+        except Exception as e:
+            logger.error("sendWechatMsgTouser failed!")
 
     def __enterEventMsgHandler(self, msg):
         # 处理用户进入会话事件
