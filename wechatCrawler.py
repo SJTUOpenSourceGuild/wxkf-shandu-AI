@@ -45,7 +45,7 @@ def replace_img_with_link(html, article_url):
     * error_code: 0表示获取成功，否则表示获取失败
     * { author: 文章作者, publish_time: 发布时间, content_html: 文章内容部分的html, parsed_content: 解析后的文章内容}
 """
-def getWechatArticalContentWithImageLink(url):
+def getWechatArticalContent(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }

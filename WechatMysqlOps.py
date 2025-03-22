@@ -3,7 +3,7 @@ from Logger import logger
 import uuid
 import datetime
 import json
-from wechatCrawler import getWechatArticalContentWithImageLink
+from wechatCrawler import getWechatArticalContent
 import hashlib
 
 database_name = "wechat_db"
@@ -57,55 +57,71 @@ class WechatMysqlOps(MysqlOpsBasic):
     """
     这里相对比较复杂，先保存公众号文章，然后在创建新的公众号文章消息
     """
-    def saveWechatArticalMsg(self, userinfo,msg):
+    def saveWechatArticalMsg(self, userinfo,msg, wechat_artical_content):
         artical_url = msg['link']['url']
-        err_code, info_dict = getWechatArticalContentWithImageLink(artical_url)
-        if err_code != 0:
-            logger.error("获取公众号文章数据失败")
-            return ""
-
-        if msg['link']['title'] != info_dict['title']:
+        if msg['link']['title'] != wechat_artical_content['title']:
             logger.warning("标题好像有问题")
 
+        if 'content_html' not in wechat_artical_content:
+            logger.error("公众号文章内容错误")
+            return -1, -1
+
         sha = hashlib.sha1()
-        sha.update("".join(info_dict['content_html'].get_text()).encode('utf-8'))
+        sha.update("".join(wechat_artical_content['content_html'].get_text()).encode('utf-8'))
 
-        wechat_artical_dict = {
-                "hash":sha.hexdigest(),
-                "title":info_dict['title'],
-                "cover_url":msg['link']['pic_url'],
-                "description":msg['link']['desc'],
-                "author":info_dict['author'],
-                "nickname":info_dict['nickname'],
-                "url":artical_url,
-                "html":info_dict['content_html'],
-                "parsed_content": info_dict['parsed_content']
-                }
+        wechat_artical_dict = {}
+        wechat_artical_dict["hash"] = sha.hexdigest()
+        if 'title' in wechat_artical_content:
+            wechat_artical_dict['title'] = wechat_artical_content['title']
+        else:
+            wechat_artical_dict['title'] = msg['link']['title']
+        wechat_artical_dict['cover_url'] = msg['link']['pic_url']
+        wechat_artical_dict['description'] = msg['link']['desc']
+        if 'author' in wechat_artical_content:
+            wechat_artical_dict['author'] = wechat_artical_content['author']
+        if 'nickname' in wechat_artical_content:
+            wechat_artical_dict['nickname'] = wechat_artical_content['nickname']
+        wechat_artical_dict['url'] = artical_url
+        wechat_artical_dict['html'] = wechat_artical_content['content_html']
+        if 'parsed_content' in wechat_artical_content:
+            wechat_artical_dict['parsed_content'] = wechat_artical_content['parsed_content']
 
-        artical_id = self.saveWechatArtical(wechat_artical_dict)
-        if artical_id <= 0:
+        try:
+            artical_id = self.saveWechatArtical(wechat_artical_dict)
+            if artical_id <= 0:
+                logger.error("保存公众号文章出错")
+                return -1,-1
+        except Exception as e:
             logger.error("保存公众号文章出错")
-            return
+            return -1,-1
 
         if not 'unionid' in userinfo:
             logger.error("没有unionid，消息无效，无法正常保存")
-            return
+            return -1, -1
 
         if msg['msgtype'] != 'link':
             logger.error("msg不是link类型")
-            return
+            return -1, -1
 
-        res, new_msg_id = self.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
-        if not res:
+        try:
+            res, new_msg_id = self.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
+            if not res:
+                logger.error("insert " + msg_table_name + " failed!")
+                return -1, artical_id
+        except Exception as e:
             logger.error("insert " + msg_table_name + " failed!")
-            return
+            return -1, artical_id
 
 
-        # 插入微信公众号文章消息
-        res, new_wechat_artical_msg_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
-        if not res:
+        try:
+            # 插入微信公众号文章消息
+            res, new_wechat_artical_msg_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
+            if not res:
+                logger.warning("insert failed!", new_wechat_artical_msg_id)
+        except Exception as e:
             logger.warning("insert failed!", new_wechat_artical_msg_id)
-        return info_dict['parsed_content']
+        finally:
+            return new_msg_id, artical_id
 
 
     """
@@ -145,12 +161,16 @@ class WechatMysqlOps(MysqlOpsBasic):
     def ifWechatArticalExist(self, artical_hash):
         try:
             res = self.query(wechat_artical_table_name, ['id'], 'hash = "' + artical_hash + '"')
-            if not res[0]:
+            if not res[0] or len(res[1]) == 0:
                 return 0
             return int(res[1][0][0])
         except Exception as e:
-            logger.error("执行query失败")
+            logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
             return -1;
+
+    def setWechatArticalSummary(self, artical_id, summary):
+        error_code,res = self.update(wechat_artical_table_name, {"summary":summary}, "id = " + str(artical_id))
+        return error_code
 
     def test(self):
         """

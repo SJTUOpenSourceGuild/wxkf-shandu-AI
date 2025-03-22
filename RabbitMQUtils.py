@@ -9,7 +9,7 @@ from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
 from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
 from WechatMysqlOps import WechatMysqlOps
-from wechatCrawler import getWechatArticalContentWithImageLink
+from wechatCrawler import getWechatArticalContent
 from utils import is_url
 from urlCrawler import fetch_and_parse
 from wechatLKERequest import askAI
@@ -122,21 +122,34 @@ class wechatKefuConsumer:
         except Exception as e:
             logger.error("save_user_to_db failed")
 
+        err_code, info_dict = getWechatArticalContent(msg['link']['url'])
+        if err_code != 0:
+            logger.error("获取公众号文章数据失败")
+            return
+
+        msg_id = -1
+        artical_id = -1
         try:
-            parsed_content = wechat_db_ops.saveWechatArticalMsg(customer_info, msg)
+            msg_id, artical_id = wechat_db_ops.saveWechatArticalMsg(customer_info, msg, info_dict)
         except Exception as e:
-            logger.error("saveWechatArticalMsg failed")
+            logger.error("saveWechatArticalMsg failed, error = " + str(e))
 
-
+        """
+        TODO: 如果数据库已经有了总结，是否可以不再询问？以节省tokens？
+        """
         try:
-            ai_answer = askAI(parsed_content)
+            ai_answer = askAI(info_dict['parsed_content'])
         except Exception as e:
             logger.error("askAI failed!")
+
 
         try:
             response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "《" + msg['link']['title'] +"》：\n" + ai_answer)
         except Exception as e:
             logger.error("sendWechatMsgTouser failed!")
+
+        if artical_id > 0 and not wechat_db_ops.setWechatArticalSummary(artical_id, ai_answer):
+            logger.error("update artical summary failed!")
 
     def __enterEventMsgHandler(self, msg):
         # 处理用户进入会话事件
