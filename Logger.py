@@ -6,7 +6,7 @@ logger.setLevel(logging.DEBUG)
 
 # 创建文件处理器（FileHandler），指定文件名
 # 按时间切割（每天午夜切割，保留 7 天日志）
-file_handler = TimedRotatingFileHandler("app.log", when="midnight", interval=1, backupCount=7)  # 默认模式为 'a'（追加）
+file_handler = TimedRotatingFileHandler("./logs/app.log", when="midnight", interval=1, backupCount=7)  # 默认模式为 'a'（追加）
 file_handler.setLevel(logging.DEBUG)  # 设置处理器的日志级别
 
 # 定义日志格式
