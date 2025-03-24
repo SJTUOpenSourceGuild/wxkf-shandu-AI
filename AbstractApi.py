@@ -43,16 +43,22 @@ class AbstractApi(object) :
     def refreshProviderAccessToken(self) :
         raise NotImplementedError
 
-    def httpCall(self, urlType, args=None) : 
+    def httpCall(self, urlType, args=None, urlParamList=[]) : 
         shortUrl = urlType[0]
         method = urlType[1]
         response = {}
         for retryCnt in range(0, 3) :
             if 'POST' == method :
                 url = self.__makeUrl(shortUrl)
+                url = self.replaceParams(url, urlParamList)
                 response = self.__httpPost(url, args)
+            elif 'POST-FILE' == method :
+                url = self.__makeUrl(shortUrl)
+                url = self.replaceParams(url,urlParamList)
+                response = self.__post_file(url, args)
             elif 'GET' == method :
                 url = self.__makeUrl(shortUrl)
+                url = self.replaceParams(url,urlParamList)
                 url = self.__appendArgs(url, args)
                 response = self.__httpGet(url)
             else : 
@@ -97,6 +103,15 @@ class AbstractApi(object) :
             return url.replace('ACCESS_TOKEN', self.getAccessToken())
         else : 
             return url
+    """
+    在url中可能存在一些参数需要替换,在请求之前完成替换
+    @Params:
+        * param_list: list，每个元素为一个tuple，保存替换前和替换后的字符串，格式：[("TYPE", "image")]
+    """
+    def replaceParams(self, url, param_list):
+        for param_tuple in param_list:
+            url = url.replace(param_tuple[0],param_tuple[1])
+        return url
 
     def __httpPost(self, url, args) :
         realUrl = self.__appendToken(url)
@@ -115,7 +130,10 @@ class AbstractApi(object) :
         return requests.get(realUrl).json()
 
     def __post_file(self, url, media_file):
-        return requests.post(url, file=media_file).json()
+        realUrl = self.__appendToken(url)
+        if DEBUG is True : 
+            print(realUrl,args)
+        return requests.post(realUrl, files=media_file).json()
 
     @staticmethod
     def __checkResponse(response):
