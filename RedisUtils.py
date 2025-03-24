@@ -1,4 +1,5 @@
 import redis
+from Logger import logger
 
 """
 返回错误码和Redis连接
@@ -14,11 +15,11 @@ def RedisConnect(host='localhost', port=6379, db_num = 0):
     )
     try:
         r.ping()
+        logger.info("Successfully connected to Redis!")
         return r, 0
-        print("Successfully connected to Redis!")
     except redis.ConnectionError:
-        print("Failed to connect to Redis")
-        return r, 0
+        logger.error("Failed to connect to Redis")
+        return r, -1
 
 
 if __name__ == "__main__":
