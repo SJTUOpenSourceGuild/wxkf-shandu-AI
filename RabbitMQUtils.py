@@ -7,23 +7,77 @@ import os
 import uuid
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
-from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo
+from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo,getLastClickedWechatArticalInfo,uploadFileFromUrl,getMsgSendCount,msgSendCountClear,msgSendCountIncrease,deleteLastClickedWechatArticalInfo
 from WechatMysqlOps import WechatMysqlOps
 from wechatCrawler import getWechatArticalContent
-from utils import is_url
+from utils import is_url,truncate_string_to_bytes
 from urlCrawler import fetch_and_parse
 from wechatLKERequest import askAI
 import datetime
 from Logger import logger
 
-class wechatKefuConsumer:
-    def __init__(self, queue_name = "hello_durable", prefetch_num = 2):
+WechatKFCallBackQueueName = "wechat_kefu_callback_queue"
+ClickedWechatArticalInfoQueueName = "clicked_wechat_artical_info_queue"
+WechatKFMsgSendMaxTime = 5
+
+def sendWechatArticalInfo(title, desc, url, post_image_url, external_userid, open_kfid, sCorpID):
+    res = uploadFileFromUrl(post_image_url)
+    tmp_post_id = ""
+    if int(res['errcode']) != 0:
+        logger.error("upload post image failed!")
+        return {"errcode": -1, "errmsg":"upload post image failed!"}
+    else:
+        tmp_post_id = res['media_id']
+
+    data = {
+        "title" : truncate_string_to_bytes(title, 128),
+        "desc" : truncate_string_to_bytes(desc,512),
+        "url" : truncate_string_to_bytes(url,2048),
+        "thumb_media_id": tmp_post_id}
+    response = sendWechatMsgTouser(external_userid, open_kfid,str(uuid.uuid4()).replace("-", "")[:32], 'link', data, sCorpID=sCorpID)
+    return response
+
+
+def activemenuHandler(msg, unionid, sCorpID):
+    res = getLastClickedWechatArticalInfo(unionid)
+    if res == None:
+        response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "激活成功！"},sCorpID=sCorpID)
+        msgSendCountIncrease(unionid)
+    else:
+        send_res = sendWechatArticalInfo(res['title'], res['desc'], res['url'], res['image_url'], msg['external_userid'], msg['open_kfid'], sCorpID)
+        if int(send_res['errcode']) != 0:
+            logger.error("activemenu Handler send wechat artical info failed! err_msg = " + send_res['errmsg'])
+        else:
+            deleteLastClickedWechatArticalInfo(unionid)
+        msgSendCountIncrease(unionid)
+
+def usageTutorialMenuHandler(msg, unionid, sCorpID):
+    response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "转发微信公众号给我，我会帮您快速理解文章～"},sCorpID=sCorpID)
+    msgSendCountIncrease(unionid)
+
+"""
+收到菜单消息时，用消息内容获取处理方法
+"""
+menuString2Handler = {
+        "点击查看如何使用":usageTutorialMenuHandler,
+        "激活会话":activemenuHandler
+        }
+
+"""
+目前没有使用
+"""
+class wechatArticalInfoClickConsumer:
+    def __init__(self, queue_name = ClickedWechatArticalInfoQueueName, prefetch_num = 2):
         self.sToken = os.environ['WECHAT_TOKEN']
         self.sEncodingAESKey = os.environ['WECHAT_AESKEY']
         self.sCorpID = os.environ['WECHAT_CORP_ID']
         self.connect(queue_name, prefetch_num)
+
+    def start(self):
+        logger.info(" [*] Waiting for tasks. To exit press CTRL+C")
+        self.channel.start_consuming()
         
-    def connect(self, queue_name = "hello_durable", prefech_num = 2):
+    def connect(self, queue_name = ClickedWechatArticalInfoQueueName, prefech_num = 2):
         credentials = pika.PlainCredentials(username=os.environ['RABBITMQ_USERNAME'], password=os.environ['RABBITMQ_PASSWORD'])
 
         connection = pika.BlockingConnection(pika.ConnectionParameters(os.environ['RABBITMQ_HOST'], os.environ['RABBITMQ_PORT'], credentials=credentials, heartbeat=30))
@@ -37,10 +91,58 @@ class wechatKefuConsumer:
         self.channel.basic_qos(prefetch_count=prefech_num)
 
         self.channel.basic_consume(queue=queue_name, on_message_callback=self.on_message)
-        logger.info(" [*] Waiting for tasks. To exit press CTRL+C")
-        self.channel.start_consuming()
 
     def on_message(self,ch, method, properties, body):
+        try:
+            task_data = json.loads(body.decode())
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+        except Exception as e:
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+            logger.warning("处理消息时出错，放弃处理并丢弃消息" + str(e))
+
+
+class wechatKefuConsumer:
+    def __init__(self, queue_name = WechatKFCallBackQueueName, prefetch_num = 2):
+        self.sToken = os.environ['WECHAT_TOKEN']
+        self.sEncodingAESKey = os.environ['WECHAT_AESKEY']
+        self.sCorpID = os.environ['WECHAT_CORP_ID']
+        self.connect(queue_name, prefetch_num)
+
+    def start(self):
+        logger.info(" [*] Waiting for tasks. To exit press CTRL+C")
+        self.channel.start_consuming()
+        
+    def connect(self, queue_name = WechatKFCallBackQueueName, prefech_num = 2):
+        credentials = pika.PlainCredentials(username=os.environ['RABBITMQ_USERNAME'], password=os.environ['RABBITMQ_PASSWORD'])
+
+        connection = pika.BlockingConnection(pika.ConnectionParameters(os.environ['RABBITMQ_HOST'], os.environ['RABBITMQ_PORT'], credentials=credentials, heartbeat=30))
+        self.channel = connection.channel()
+
+        # 声明持久化队列
+        self.channel.queue_declare(queue=queue_name, durable=True)
+
+        # 每次最多处理一条消息（避免过载）
+        self.channel.basic_qos(prefetch_count=prefech_num)
+
+        self.channel.basic_consume(queue=queue_name, on_message_callback=self.on_message)
+
+    def __getUserInfo(self, external_userid):
+        user_info_resp = getUserinfo([external_userid])
+        if 'customer_list' not in user_info_resp:
+            logger.warning("获取的用户信息错误")
+            return
+
+        customer_list = user_info_resp['customer_list']
+        if len(customer_list) <= 0:
+            logger.warning("获取到的用户数据为0个（应为1个）")
+            return
+
+        customer_info = customer_list[0]
+        return customer_info
+
+
+    def on_message(self,ch, method, properties, body):
+        # 收到消息后清空发送消息数量
         try:
             task_data = json.loads(body.decode())
             result = self.__process_task(task_data)
@@ -58,8 +160,6 @@ class wechatKefuConsumer:
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
             logger.warning("处理消息时出错，放弃处理并丢弃消息" + str(e))
 
-    def reconnect(self):
-        pass
     def __decode_msg(self, data):
         wxcpt=WXBizJsonMsgCrypt(self.sToken,self.sEncodingAESKey,self.sCorpID)
     
@@ -77,27 +177,25 @@ class wechatKefuConsumer:
             logger.warning("no external_userid in msg")
             return
 
-        user_info_resp = getUserinfo([msg['external_userid']])
-
-        if 'customer_list' not in user_info_resp:
-            logger.warning("获取的用户信息错误")
-            return
-
-        customer_list = user_info_resp['customer_list']
-        if len(customer_list) <= 0:
-            logger.warning("获取到的用户数据为0个（应为1个）")
-            return
-
-        customer_info = customer_list[0]
+        customer_info = self.__getUserInfo(msg['external_userid'])
         wechat_db_ops = WechatMysqlOps()
         wechat_db_ops.save_user_to_db(customer_info)
         wechat_db_ops.saveWechatTextMsg(customer_info, msg)
 
+        if 'menu_id' in msg['text']:
+            # 通过点击菜单选项发送的文字
+            menuString2Handler[msg['text']['content']](msg, customer_info['unionid'],self.sCorpID)
+            return
+
         if is_url(msg['text']['content']): # 如果文本整体是一个url，则特殊处理
             html =fetch_and_parse(msg['text']['content'])
-            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了一个网址：" + html.title.text,sCorpID=self.sCorpID)
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "你叫：" + customer_info['nickname'] +"，你刚刚发送了一个网址：" + html.title.text},sCorpID=self.sCorpID)
+            if int(response['errcode']) == 0:
+                msgSendCountIncrease(customer_info['unionid'])
         else:
-            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content'],sCorpID=self.sCorpID)
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content']},sCorpID=self.sCorpID)
+            if int(response['errcode']) == 0:
+                msgSendCountIncrease(customer_info['unionid'])
 
     def __linkMsgHandler(self, msg):
         # 链接
@@ -105,17 +203,7 @@ class wechatKefuConsumer:
             logger.warning("no external_userid in msg")
             return
 
-        response = getUserinfo([msg['external_userid']])
-        if 'customer_list' not in response:
-            logger.warning("获取用户信息失败")
-
-
-        customer_list = response['customer_list']
-        if len(customer_list) <= 0:
-            logger.warning("获取到的用户数量为0（应为1）")
-            return
-
-        customer_info = customer_list[0]
+        customer_info = self.__getUserInfo(msg['external_userid'])
         wechat_db_ops = WechatMysqlOps()
         try:
             wechat_db_ops.save_user_to_db(customer_info)
@@ -144,31 +232,87 @@ class wechatKefuConsumer:
 
 
         try:
-            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "《" + msg['link']['title'] +"》：\n" + ai_answer)
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content":"《" + msg['link']['title'] +"》：\n" + ai_answer})
+            msgSendCountIncrease(customer_info['unionid'])
         except Exception as e:
             logger.error("sendWechatMsgTouser failed!")
 
         if artical_id > 0 and not wechat_db_ops.setWechatArticalSummary(artical_id, ai_answer):
             logger.error("update artical summary failed!")
 
-    def __enterEventMsgHandler(self, msg):
+    def __sendWechatArticalInfo(self, title, desc, url, post_image_url, external_userid, open_kfid, unionid):
+        send_res = sendWechatArticalInfo(title, desc, url, post_image_url, external_userid, open_kfid, self.sCorpID)
+        if int(send_res['errcode']) != 0:
+            logger.error("activemenu Handler send wechat artical info failed! err_msg = " + send_res['errmsg'])
+        else:
+            deleteLastClickedWechatArticalInfo(unionid)
+        return
+
+    def __enterEventMsgHandler(self, msg, customer_info):
+        if not 'unionid' in customer_info:
+            logger.error("no unionid in customer_info")
+            return
+        needSendWechatInfo = False
+        res = getLastClickedWechatArticalInfo(customer_info["unionid"])
+
+        if res == None:
+            # 没有点击信息
+            pass
+        else:
+            # 存在点击
+            needSendWechatInfo = True
+
         # 处理用户进入会话事件
-        response = sendWechatMsgTouserOnEvent(msg['event']['welcome_code'],str(uuid.uuid4()).replace("-", "")[:32], "你叫：" + customer_info['nickname'] +"，欢迎光临",sCorpID=self.sCorpID)
-        pass
+        if 'welcome_code' in msg['event']:
+            # 可以发送欢迎语（TODO：提醒用户发送消息，可以发送菜单，方便用户激活对话）
+            """
+            包含welcome_code的条件：用户在过去48小时里未收过欢迎语，且未向客服发过消息
+            可能分为2种情况：
+            1. 用户第一次使用，需要讲解如何使用
+            2. 用户已经用过，但距离上次发送消息超过48小时了
+
+            两种情况下都要提示用户激活会话（否则可能导致消息发送失败）
+            """
+            welcome_menu = [{"type":"text", "text":{"content": "请点击下方“激活会话”选项，否则后续会出现无法收到消息的情况："}},{"type": "click", "click": {"id": "101", "content": "激活会话"}},{"type":"text", "text":{"content":"\n"}}]
+            if needSendWechatInfo:
+                welcome_menu.append({"type":"text", "text":{"content":"下方是您最近在小程序中点击查看的文章链接："}})
+                welcome_menu.append({"type":"view","view": {
+                    "url": res['url'],
+                    "content": "《" +res['title'] + "》"
+                }})
+            else:
+                welcome_menu.append({"type":"click","click": {
+                    "id": "201",
+                    "content": "点击查看如何使用"
+                }})
+            response = sendWechatMsgTouserOnEvent(msg['event']['welcome_code'],str(uuid.uuid4()).replace("-", "")[:32], 'msgmenu', {"head_content": "欢迎使用闪读AI！\n闪读AI：帮您快速阅读公众号文章！\n", "list": welcome_menu,"tail_content": "\n——闪读AI"},sCorpID=self.sCorpID)
+            msgSendCountIncrease(customer_info['unionid'])
+        else:
+            # 无权发送欢迎语的情况，直接发送消息（可能失败）
+            if getMsgSendCount(customer_info['unionid']) == WechatKFMsgSendMaxTime - 1:
+                # 只能发送最后一条消息了
+                head_content = ""
+                if needSendWechatInfo:
+                    head_content = "点击下方“激活会话”选项，接受刚刚点击的文章："
+                else:
+                    head_content = "点击下方“激活会话”选项，以继续接受消息："
+                welcome_menu = [{"type": "click", "click": {"id": "101", "content": "激活会话"}},{"type":"text", "text":{"content":"\n"}}]
+                response = sendWechatMsgTouser(msg['event']['external_userid'],msg['event']['open_kfid'], str(uuid.uuid4()).replace("-", "")[:32], 'msgmenu', {"head_content": head_content, "list": welcome_menu,"tail_content": "⬆️点击上方“激活会话”选项"},sCorpID=self.sCorpID)
+            else:
+                self.__sendWechatArticalInfo(res['title'], res['desc'], res['url'], res['image_url'], msg['event']['external_userid'], msg['event']['open_kfid'], customer_info['unionid'])
+                msgSendCountIncrease(customer_info['unionid'])
 
     def __recallMsgEventMsgHandler(self, msg):
         # 处理用户撤回消息事件
         response = sendWechatMsgTouser(msg['event']['external_userid'], msg['event']['open_kfid'],str(uuid.uuid4()).replace("-", "")[:32], customer_info['nickname'] +"，你刚刚发送了什么？我没看见。",sCorpID=self.sCorpID)
-        pass
 
     def __eventMsgHandler(self, msg):
-        response = getUserinfo([msg['event']['external_userid']])
-        customer_info = response['customer_list'][0]
+        customer_info = self.__getUserInfo(msg['event']['external_userid'])
         # 事件
         if msg['event']['event_type'] == 'enter_session':
-            self.__enterEventMsgHandler(self, msg)
+            self.__enterEventMsgHandler(msg, customer_info)
         elif msg['event']['event_type'] == 'user_recall_msg':
-            self.__recallMsgEventMsgHandler(self, msg)
+            self.__recallMsgEventMsgHandler(msg)
         elif msg['event']['event_type'] == 'msg_send_fail':
             # 消息发送失败
             pass
@@ -184,18 +328,37 @@ class wechatKefuConsumer:
             msg_list = fetchWechatMsg(decoded_dict["xml"]["Token"], decoded_dict["xml"]["OpenKfId"], sCorpID=self.sCorpID)
             for msg in msg_list:
                 if msg['msgtype'] == 'text':
+                    customer_info = self.__getUserInfo(msg['external_userid'])
+                    msgSendCountClear(customer_info['unionid'])
                     self.__textMsgHandler(msg)
                 elif msg['msgtype'] == 'link':
+                    customer_info = self.__getUserInfo(msg['external_userid'])
+                    msgSendCountClear(customer_info['unionid'])
                     self.__linkMsgHandler(msg)
                 elif msg['msgtype'] == 'event':
                     self.__eventMsgHandler(msg)
                 else:
                    # 暂不支持
-                   response = getUserinfo([msg['external_userid']])
-                   customer_info = response['customer_list'][0]
+                   customer_info = self.__getUserInfo(msg['external_userid'])
                    response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],str(uuid.uuid4()).replace("-", "")[:32], customer_info['nickname'] +"，此消息类型暂不支持。",sCorpID=self.sCorpID)
+                   #msgSendCountIncrease()
     
             return True
 
+
 if __name__ == '__main__':
+    consumer_kefu = wechatKefuConsumer()
+    thread_kefu = threading.Thread(target=consumer_kefu.start)
+    thread_kefu.start()
+
+    consumer_artical_info = wechatArticalInfoClickConsumer()
+    thread_artical_info = threading.Thread(target=consumer_artical_info.start)
+    thread_artical_info.start()
+
+    thread_kefu.join()
+    thread_artical_info.join()
+
+    """
     consumer = wechatKefuConsumer()
+    consumer.start()
+    """
