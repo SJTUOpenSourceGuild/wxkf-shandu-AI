@@ -1,9 +1,9 @@
 import atexit
-import signal
 import pymysql
 import os
 import uuid
 import datetime
+from Logger import logger
 
 class MysqlOpsBasic:
     """
@@ -22,7 +22,6 @@ class MysqlOpsBasic:
         数据库端口，默认为3306
     """
     def __init__(self, host=os.getenv('MYSQL_HOST'), user=os.getenv('MYSQL_USERNAME'), password=os.getenv('MYSQL_PASSWORD'), port=3306, database=None):
-        signal.signal(signal.SIGINT, self.signal_exit)
         atexit.register(self.cleanUp)
         try:
             self.db = pymysql.connect(host=host,
@@ -31,10 +30,10 @@ class MysqlOpsBasic:
                                       database=database,
                                       port=port)
         except Exception as e:
-            print("connect mysql server failed: ", e)
+            logger.error("connect mysql server failed: " + str(e))
             exit()
         if not self.db.open:
-            print("connect mysql server failed")
+            logger.error("connect mysql server failed")
             exit()
 
     def __del__(self):
@@ -48,7 +47,7 @@ class MysqlOpsBasic:
         try:
             self.db.close()
         except Exception as e:
-            print(e)
+            logger.error("clean up error: " + str(e))
 
     def excute_cmd(self,sql_cmd):
         """执行sql语句
@@ -508,18 +507,16 @@ def test_insert():
 
     res, msg = mysql.insert(user_table_name,{"uid":uid, "union_id":union_id})
     if not res:
-        print("insert " + user_table_name + " failed!")
-    print("new user id = ",msg)
+        logger.warning("insert " + user_table_name + " failed!")
 
     msg_id = str(uuid.uuid4()).replace("-", "")[:32]
     res, msg = mysql.insert(msg_table_name,{"msg_id": msg_id, "msg_type":"text", "user_union_id":union_id, "open_kfid":"123","send_time":datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
     if not res:
-        print("insert " + user_table_name + " failed!")
-    print("new msg id = ",msg)
+        logger.warning("insert " + msg_table_name + " failed!")
+
     res, msg = mysql.insert(text_msg_table_name,{"msg_id": msg_id, "content":"content"})
     if not res:
-        print("insert " + user_table_name + " failed!")
-    print("new text msg id = ",msg)
+        logger.warning("insert " + text_msg_table_name + " failed!")
 
 
 if __name__ == '__main__':
