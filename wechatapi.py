@@ -227,7 +227,7 @@ def sendWechatMsgTouser(external_userid, open_kf_id, msgid, msg_type = 'text', d
 """
 和sendWechatMsgTouser类似用于处理发送欢迎语等情况
 """
-def sendWechatMsgTouserOnEvent(code, msgid, msg_type = 'text', data = {"content":"test"},
+def sendWechatMsgTouserOnEvent(code, msgid, msg_type = 'text', data={"content":"你好"},
                         sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
     api = WechatApi(sCorpID, secret=secret)
     response = api.httpCall(
@@ -236,9 +236,7 @@ def sendWechatMsgTouserOnEvent(code, msgid, msg_type = 'text', data = {"content"
             "code": code,
             "msgid": msgid,
             "msgtype" : msg_type,
-            "text" : {
-                "content" : msg
-            }
+            msg_type : data
         }
     )
     return response
