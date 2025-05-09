@@ -155,6 +155,26 @@ class WechatMysqlOps(MysqlOpsBasic):
             return -1;
         return int(new_wechat_artical_id)
 
+    def ifWechatArticalExistByUrl(self, artical_url):
+        try:
+            res = self.query(wechat_artical_table_name, ['id'], 'url = "' + artical_url + '"')
+            if not res[0] or len(res[1]) == 0:
+                return 0
+            return int(res[1][0][0])
+        except Exception as e:
+            logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
+            return -1;
+
+    def getWechatArticalByUrl(self, artical_url):
+        try:
+            res = self.query(wechat_artical_table_name, ['parsed_content'], 'url = "' + artical_url + '"')
+            if not res[0] or len(res[1]) == 0:
+                return ""
+            return res[1][0][0]
+        except Exception as e:
+            logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
+            return "";
+
     """
     判断指定hash的公众号文章是否已经存在，如果已经存在，则返回id，不存在返回0，出错返回-1
     """
