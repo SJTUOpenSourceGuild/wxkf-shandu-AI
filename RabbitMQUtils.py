@@ -210,10 +210,15 @@ class wechatKefuConsumer:
         except Exception as e:
             logger.error("save_user_to_db failed")
 
-        err_code, info_dict = getWechatArticalContent(msg['link']['url'])
-        if err_code != 0:
-            logger.error("获取公众号文章数据失败")
-            return
+        # 首先查看数据库中是否有该文章
+        if wechat_db_ops.ifWechatArticalExistByUrl(msg['link']['url']) > 0:
+            artical_content = wechat_db_ops.getWechatArticalByUrl(msg['link']['url'])
+        else:
+            err_code, info_dict = getWechatArticalContent(msg['link']['url'])
+            artical_content = info_dict['parsed_content']
+            if err_code != 0:
+                logger.error("获取公众号文章数据失败")
+                return
 
         msg_id = -1
         artical_id = -1
@@ -226,7 +231,7 @@ class wechatKefuConsumer:
         TODO: 如果数据库已经有了总结，是否可以不再询问？以节省tokens？
         """
         try:
-            ai_answer = askAI(info_dict['parsed_content'])
+            ai_answer = askAI(artical_content)
         except Exception as e:
             logger.error("askAI failed!")
 
