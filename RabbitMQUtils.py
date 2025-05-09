@@ -34,7 +34,10 @@ def sendWechatArticalInfo(title, desc, url, post_image_url, external_userid, ope
         "desc" : truncate_string_to_bytes(desc,512),
         "url" : truncate_string_to_bytes(url,2048),
         "thumb_media_id": tmp_post_id}
-    response = sendWechatMsgTouser(external_userid, open_kfid,str(uuid.uuid4()).replace("-", "")[:32], 'link', data, sCorpID=sCorpID)
+    try:
+        response = sendWechatMsgTouser(external_userid, open_kfid,str(uuid.uuid4()).replace("-", "")[:32], 'link', data, sCorpID=sCorpID)
+    except Exception as e:
+        logger.error("send wechat message to user failed!")
     return response
 
 
