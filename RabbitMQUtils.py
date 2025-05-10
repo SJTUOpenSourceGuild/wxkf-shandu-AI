@@ -194,7 +194,6 @@ class wechatKefuConsumer:
         customer_info = self.__getUserInfo(msg['external_userid'])
         wechat_db_ops = WechatMysqlOps()
         wechat_db_ops.save_user_to_db(customer_info)
-        wechat_db_ops.saveWechatTextMsg(customer_info, msg)
 
         if 'menu_id' in msg['text']:
             # 通过点击菜单选项发送的文字
