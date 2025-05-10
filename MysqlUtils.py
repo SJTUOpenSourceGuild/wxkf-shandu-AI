@@ -21,7 +21,7 @@ class MysqlOpsBasic:
     - port
         数据库端口，默认为3306
     """
-    def __init__(self, host=os.getenv('MYSQL_HOST'), user=os.getenv('MYSQL_USERNAME'), password=os.getenv('MYSQL_PASSWORD'), port=3306, database=None):
+    def __init__(self, host=os.getenv('MYSQL_HOST'), user=os.getenv('MYSQL_USERNAME'), password=os.getenv('MYSQL_PASSWORD'), port=int(os.getenv('MYSQL_PORT')), database=None):
         atexit.register(self.cleanUp)
         try:
             self.db = pymysql.connect(host=host,

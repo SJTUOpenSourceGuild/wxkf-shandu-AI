@@ -5,8 +5,9 @@ import datetime
 import json
 from wechatCrawler import getWechatArticalContent
 import hashlib
+import os
 
-database_name = "wechat_db"
+database_name = os.getenv('MYSQL_DATABASE')
 user_table_name = "users"
 user_profile_table_name = "user_profile"
 msg_table_name = "msg_from_wechat"
