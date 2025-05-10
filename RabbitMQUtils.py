@@ -293,7 +293,10 @@ class wechatKefuConsumer:
 
             两种情况下都要提示用户激活会话（否则可能导致消息发送失败）
             """
-            welcome_menu = [{"type":"text", "text":{"content": "请点击下方“激活会话”选项，否则后续会出现无法收到消息的情况："}},{"type": "click", "click": {"id": "101", "content": "激活会话"}},{"type":"text", "text":{"content":"\n"}}]
+            welcome_menu = []
+            welcome_menu.append({"type":"miniprogram", "miniprogram": {"appid":"wx394fd56312f409e6","pagepath":"pages/index/index.html","content":"点击进入微信小程序"}})
+            welcome_menu.append({"type": "click", "click": {"id": "102", "content": "加入内测群"}})
+
             if needSendWechatInfo:
                 welcome_menu.append({"type":"text", "text":{"content":"下方是您最近在小程序中点击查看的文章链接："}})
                 welcome_menu.append({"type":"view","view": {
@@ -305,7 +308,11 @@ class wechatKefuConsumer:
                     "id": "201",
                     "content": "点击查看如何使用"
                 }})
-            response = sendWechatMsgTouserOnEvent(msg['event']['welcome_code'],str(uuid.uuid4()).replace("-", "")[:32], 'msgmenu', {"head_content": "欢迎使用闪读AI！\n闪读AI：帮您快速阅读公众号文章！\n", "list": welcome_menu,"tail_content": "\n——闪读AI"},sCorpID=self.sCorpID)
+
+            welcome_menu.append({"type":"text", "text":{"content":"\n"}})
+            welcome_menu.append({"type":"text", "text":{"content": "\n请点击下方“激活会话”选项，否则后续会出现无法收到消息的情况："}})
+            welcome_menu.append({"type": "click", "click": {"id": "101", "content": "激活会话"}})
+            response = sendWechatMsgTouserOnEvent(msg['event']['welcome_code'],str(uuid.uuid4()).replace("-", "")[:32], 'msgmenu', {"head_content": "欢迎使用帮我读AI！\n帮我读AI：帮您快速阅读公众号文章！\n", "list": welcome_menu},sCorpID=self.sCorpID)
             msgSendCountIncrease(customer_info['unionid'])
         else:
             # 无权发送欢迎语的情况，直接发送消息（可能失败）
