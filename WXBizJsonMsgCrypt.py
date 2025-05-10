@@ -49,7 +49,7 @@ class SHA1:
             sha.update("".join(sortlist).encode('utf-8'))
             return  ierror.WXBizMsgCrypt_OK, sha.hexdigest()
         except Exception as e:
-            print(e)
+            print("getSHA1 failed!error = ",e)
             return  ierror.WXBizMsgCrypt_ComputeSignature_Error, None
   
 
@@ -71,10 +71,9 @@ class JsonParse:
         """
         try:
             json_dict = json.loads(jsontext)
-            print(json_dict)
             return  ierror.WXBizMsgCrypt_OK, json_dict['Encrypt']
         except Exception as e: 
-            print(e)
+            print("Json parse extract failed! error = ", e)
             return ierror.WXBizMsgCrypt_ParseJson_Error, None
     def generate(self, encrypt, signature, timestamp, nonce):
         """生成json消息
@@ -151,7 +150,7 @@ class Prpcrypt(object):
             # 使用BASE64对加密后的字符串进行编码
             return ierror.WXBizMsgCrypt_OK, base64.b64encode(ciphertext)
         except Exception as e:
-            print(e)
+            print("encrypt failed! error = ",e)
             return  ierror.WXBizMsgCrypt_EncryptAES_Error,None
     
     def decrypt(self,text,receiveid):
@@ -164,7 +163,7 @@ class Prpcrypt(object):
             # 使用BASE64对密文进行解码，然后AES-CBC解密
             plain_text  = cryptor.decrypt(base64.b64decode(text))
         except Exception as e:
-            print(e)
+            print("decrypt failed! error = ",e)
             return  ierror.WXBizMsgCrypt_DecryptAES_Error,None
         try:
             # pad = ord(plain_text[-1])
@@ -178,7 +177,7 @@ class Prpcrypt(object):
             json_content = content[4 : json_len+4] 
             from_receiveid = content[json_len+4:]
         except Exception as e:
-            print(e)
+            print("decrypt failed! error = ",e)
             return  ierror.WXBizMsgCrypt_IllegalBuffer,None
         if  from_receiveid.decode('utf-8') != receiveid:
             print("receiveid not match")
@@ -219,13 +218,10 @@ class WXBizJsonMsgCrypt(object):
         ret,signature = sha1.getSHA1(self.m_sToken, sTimeStamp, sNonce, sEchoStr)
         if ret  != 0:
             return ret, None 
-        print("signature succeed! signature = ",signature)
         if not signature == sMsgSignature:
             return ierror.WXBizMsgCrypt_ValidateSignature_Error, None
         pc = Prpcrypt(self.key)
         ret,sReplyEchoStr = pc.decrypt(sEchoStr,self.m_sReceiveId)
-        print(ret)
-        print(sReplyEchoStr)
         return ret,sReplyEchoStr
 	
     def EncryptMsg(self, sReplyMsg, sNonce, timestamp = None):
@@ -269,7 +265,6 @@ class WXBizJsonMsgCrypt(object):
             return ret, None 
         if not signature == sMsgSignature:
             print("signature not match")
-            print(signature)
             return ierror.WXBizMsgCrypt_ValidateSignature_Error, None
         pc = Prpcrypt(self.key)
         ret,json_content = pc.decrypt(encrypt,self.m_sReceiveId)

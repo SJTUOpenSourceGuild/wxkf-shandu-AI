@@ -3,3 +3,7 @@ xmltodict
 pycryptodome
 pika
 requests
+redis
+pymysql
+cryptography
+sseclient-py
