@@ -7,7 +7,7 @@ import os
 import uuid
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
-from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo,getLastClickedWechatArticalInfo,uploadFileFromUrl,getMsgSendCount,msgSendCountClear,msgSendCountIncrease,deleteLastClickedWechatArticalInfo
+from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo,getLastClickedWechatArticalInfo,uploadFileFromUrl, uploadFile,getMsgSendCount,msgSendCountClear,msgSendCountIncrease,deleteLastClickedWechatArticalInfo
 from WechatMysqlOps import WechatMysqlOps
 from wechatCrawler import getWechatArticalContent
 from utils import is_url,truncate_string_to_bytes
@@ -40,6 +40,16 @@ def sendWechatArticalInfo(title, desc, url, post_image_url, external_userid, ope
         logger.error("send wechat message to user failed!")
     return response
 
+def joinTestGroup(msg, unionid, sCorpID):
+    res = uploadFile("invite.jpeg")
+    if int(res['errcode']) != 0:
+        logger.error("upload post image failed!")
+        return
+    else:
+        tmp_post_id = res['media_id']
+    response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "image", {"media_id": tmp_post_id},sCorpID=sCorpID)
+    msgSendCountIncrease(unionid)
+
 
 def activemenuHandler(msg, unionid, sCorpID):
     res = getLastClickedWechatArticalInfo(unionid)
@@ -63,7 +73,8 @@ def usageTutorialMenuHandler(msg, unionid, sCorpID):
 """
 menuString2Handler = {
         "点击查看如何使用":usageTutorialMenuHandler,
-        "激活会话":activemenuHandler
+        "激活会话":activemenuHandler,
+        "加入内测群":joinTestGroup
         }
 
 """
