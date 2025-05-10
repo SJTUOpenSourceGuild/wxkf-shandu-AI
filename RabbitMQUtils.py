@@ -196,7 +196,12 @@ class wechatKefuConsumer:
             if int(response['errcode']) == 0:
                 msgSendCountIncrease(customer_info['unionid'])
         else:
-            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content']},sCorpID=self.sCorpID)
+            #response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "你叫：" + customer_info['nickname'] +"，你刚刚发送了：" + msg['text']['content']},sCorpID=self.sCorpID)
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content": "目前暂不支持文字问答，敬请期待！"},sCorpID=self.sCorpID)
+
+            msgSendCountIncrease(customer_info['unionid'])
+
+
             if int(response['errcode']) == 0:
                 msgSendCountIncrease(customer_info['unionid'])
 
