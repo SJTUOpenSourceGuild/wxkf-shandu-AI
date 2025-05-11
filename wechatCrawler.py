@@ -43,14 +43,14 @@ def replace_img_with_link(html, article_url):
     * url: 微信公众号文章地址
 @Returns:
     * error_code: 0表示获取成功，否则表示获取失败
-    * { author: 文章作者, publish_time: 发布时间, content_html: 文章内容部分的html, parsed_content: 解析后的文章内容}
+    * {url:微信公众号文章地址, author: 文章作者, publish_time: 发布时间, content_html: 文章内容部分的html, parsed_content: 解析后的文章内容}
 """
 def getWechatArticalContent(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
     response = requests.get(url, headers=headers)
-    res = {}
+    res = {"url":url}
     if response.status_code == 200:
         soup = BeautifulSoup(response.text, 'html.parser')
         page_content_html = soup.find('div', id="page-content")
