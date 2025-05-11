@@ -28,7 +28,9 @@ class MysqlOpsBasic:
                                       user=user,
                                       password=password,
                                       database=database,
-                                      port=port)
+                                      port=port,
+                                      charset='utf8mb4'
+                                      )
         except Exception as e:
             logger.error("connect mysql server failed: " + str(e))
             exit()
@@ -262,7 +264,7 @@ class MysqlOpsBasic:
         except Exception as e:
             return False, str(e)
         """
-        all_data = self.query(source_table,limit=5)
+        res, all_data = self.query(source_table,limit=5)
         return True, ""
 
     def insert(self, table_name, kv_dict):
@@ -294,11 +296,11 @@ class MysqlOpsBasic:
 
         sql = sql[:-1] # 删除最后一个逗号
         sql += ")"
-
         with self.db.cursor() as cursor:
             try:
                 cursor.execute(sql, kv_dict)
             except Exception as e:
+                logger.warning("insert failed! table name = " + table_name)
                 return False, str(e)
             res = self.excute_cmd("SELECT LAST_INSERT_ID() AS new_id")
             return True, str(res[0][0])
