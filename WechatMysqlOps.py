@@ -3,7 +3,6 @@ from Logger import logger
 import uuid
 import datetime
 import json
-from wechatCrawler import getWechatArticalContent
 import hashlib
 import os
 
@@ -39,7 +38,7 @@ class WechatMysqlOps(MysqlOpsBasic):
         if not res:
             logger.error("insert " + user_profile_table_name + " failed!")
     
-    def saveWechatTextMsg(self, userinfo,msg):
+    def saveWechatTextMsg(self, userinfo, msg):
         if not 'unionid' in userinfo:
             logger.error("没有unionid，消息无效，无法正常保存")
             return
@@ -54,28 +53,79 @@ class WechatMysqlOps(MysqlOpsBasic):
         res, new_text_msg_id = self.insert(text_msg_table_name,{"msg_id":msg["msgid"],"content":msg['text']['content']})
         if not res:
             logger.error("insert " + text_msg_table_name + " failed!")
+
+    """
+    保存消息，需要注意的是这里是基础消息，没有具体内容，内容在其他table中
+    @Params
+        - user_unionid: 用户在微信系统 中的unionid
+        - msg:字典，微信客服回调函数的参数，需要包含如下字段：
+            - msg_id
+            - msgtype
+            - open_kfid
+            - send_time
+    @Returns:
+       - id: 保存成功返回消息在数据库中的id，否则返回-1
+    """
+    def saveWechatMsg(self, user_unionid, msg):
+        try:
+            res, new_msg_id = self.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":user_unionid, "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
+            if not res:
+                logger.error("insert " + msg_table_name + " failed!")
+                return -1
+        except Exception as e:
+            logger.error("insert " + msg_table_name + " failed!")
+            return -1
+        return int(new_msg_id)
     
     """
-    这里相对比较复杂，先保存公众号文章，然后在创建新的公众号文章消息
+    保存微信公众号文章消息
     """
-    def saveWechatArticalMsg(self, userinfo,msg, wechat_artical_content):
+    def saveWechatArticalMsg(self, userinfo,msg, artical_id):
+
+        if not 'unionid' in userinfo:
+            logger.error("没有unionid，消息无效，无法正常保存")
+            return -1
+
+        if msg['msgtype'] != 'link':
+            logger.error("msg不是link类型")
+            return -1
+
+        if self.saveWechatMsg(userinfo['unionid'], msg) <= 0:
+            return -1
+
+        new_wechat_artical_msg_id = 0
+
+        try:
+            artical_url = msg['link']['url']
+            # 插入微信公众号文章消息
+            res, new_wechat_artical_msg_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
+            if not res:
+                logger.warning("insert failed!", new_wechat_artical_msg_id)
+        except Exception as e:
+            logger.warning("insert failed!", new_wechat_artical_msg_id)
+        finally:
+            return new_wechat_artical_msg_id
+
+
+    """
+    @Params:
+        - wechat_artical_content: 直接使用wechatCrawler中的getWechatArticalContent结果
+    @Returns:
+        插入成功就返回公众号文章在数据库中的id，失败返回-1
+    """
+    def saveWechatArtical(self, wechat_artical_content, msg):
         artical_url = msg['link']['url']
-        if msg['link']['title'] != wechat_artical_content['title']:
-            logger.warning("标题好像有问题")
 
         if 'content_html' not in wechat_artical_content:
             logger.error("公众号文章内容错误")
-            return -1, -1
+            return -1
 
         sha = hashlib.sha1()
         sha.update("".join(wechat_artical_content['content_html'].get_text()).encode('utf-8'))
 
         wechat_artical_dict = {}
         wechat_artical_dict["hash"] = sha.hexdigest()
-        if 'title' in wechat_artical_content:
-            wechat_artical_dict['title'] = wechat_artical_content['title']
-        else:
-            wechat_artical_dict['title'] = msg['link']['title']
+        wechat_artical_dict['title'] = wechat_artical_content['title']
         wechat_artical_dict['cover_url'] = msg['link']['pic_url']
         wechat_artical_dict['description'] = msg['link']['desc']
         if 'author' in wechat_artical_content:
@@ -88,42 +138,14 @@ class WechatMysqlOps(MysqlOpsBasic):
             wechat_artical_dict['parsed_content'] = wechat_artical_content['parsed_content']
 
         try:
-            artical_id = self.saveWechatArtical(wechat_artical_dict)
+            artical_id = self.saveWechatArticalDict(wechat_artical_dict)
             if artical_id <= 0:
                 logger.error("保存公众号文章出错")
-                return -1,-1
+                return -1
         except Exception as e:
             logger.error("保存公众号文章出错")
-            return -1,-1
-
-        if not 'unionid' in userinfo:
-            logger.error("没有unionid，消息无效，无法正常保存")
-            return -1, -1
-
-        if msg['msgtype'] != 'link':
-            logger.error("msg不是link类型")
-            return -1, -1
-
-        try:
-            res, new_msg_id = self.insert(msg_table_name,{"msg_id":msg["msgid"], "msg_type":msg['msgtype'],"user_union_id":userinfo['unionid'], "open_kfid":msg["open_kfid"], "send_time":datetime.datetime.fromtimestamp(int(msg['send_time'])).strftime("%Y-%m-%d %H:%M:%S"), "origin_data":json.dumps(msg)})
-            if not res:
-                logger.error("insert " + msg_table_name + " failed!")
-                return -1, artical_id
-        except Exception as e:
-            logger.error("insert " + msg_table_name + " failed!")
-            return -1, artical_id
-
-
-        try:
-            # 插入微信公众号文章消息
-            res, new_wechat_artical_msg_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
-            if not res:
-                logger.warning("insert failed!", new_wechat_artical_msg_id)
-        except Exception as e:
-            logger.warning("insert failed!", new_wechat_artical_msg_id)
-        finally:
-            return new_msg_id, artical_id
-
+            return -1
+        return artical_id
 
     """
     保存微信公众号文章
@@ -142,7 +164,7 @@ class WechatMysqlOps(MysqlOpsBasic):
           parsed_content
           summary
     """
-    def saveWechatArtical(self, data):
+    def saveWechatArticalDict(self, data):
         # 1. 判断数据是否已经存在
         # 2. 如果已经存在，就返回对应数据的id
         # 3. 如果不存在，则插入后返回新数据的id
@@ -158,20 +180,20 @@ class WechatMysqlOps(MysqlOpsBasic):
 
     def ifWechatArticalExistByUrl(self, artical_url):
         try:
-            res = self.query(wechat_artical_table_name, ['id'], 'url = "' + artical_url + '"')
-            if not res[0] or len(res[1]) == 0:
+            res, data = self.query(wechat_artical_table_name, ['id'], 'url = "' + artical_url + '"')
+            if not res:
                 return 0
-            return int(res[1][0][0])
+            return int(data[0][0])
         except Exception as e:
-            logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
+            logger.error("执行query失败, artical url = " + artical_url + ", error = " + str(e))
             return -1;
 
     def getWechatArticalByUrl(self, artical_url):
         try:
-            res = self.query(wechat_artical_table_name, ['parsed_content'], 'url = "' + artical_url + '"')
-            if not res[0] or len(res[1]) == 0:
+            res, data = self.query(wechat_artical_table_name, None, 'url = "' + artical_url + '"')
+            if not res:
                 return ""
-            return res[1][0][0]
+            return data[0]
         except Exception as e:
             logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
             return "";

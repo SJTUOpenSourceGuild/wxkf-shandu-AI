@@ -228,20 +228,29 @@ class wechatKefuConsumer:
         except Exception as e:
             logger.error("save_user_to_db failed")
 
+        artical_msg_id = -1
+        artical_id = -1
+
         # 首先查看数据库中是否有该文章
         if wechat_db_ops.ifWechatArticalExistByUrl(msg['link']['url']) > 0:
-            artical_content = wechat_db_ops.getWechatArticalByUrl(msg['link']['url'])
+            # 已经存在文章
+            logger.info("artical already exist")
+            artical = wechat_db_ops.getWechatArticalByUrl(msg['link']['url'])
+            # TODO: 目前只能通过查看表的结构获取对应列，后续考虑优化
+            artical_content = artical[9]
+            artical_id = artical[0]
         else:
+            # 新文章
+            logger.info("new artical")
             err_code, info_dict = getWechatArticalContent(msg['link']['url'])
+            artical_id = wechat_db_ops.saveWechatArtical(info_dict, msg)
             artical_content = info_dict['parsed_content']
             if err_code != 0:
                 logger.error("获取公众号文章数据失败")
                 return
 
-        msg_id = -1
-        artical_id = -1
         try:
-            msg_id, artical_id = wechat_db_ops.saveWechatArticalMsg(customer_info, msg, info_dict)
+            artical_msg_id = wechat_db_ops.saveWechatArticalMsg(customer_info, msg, int(artical_id))
         except Exception as e:
             logger.error("saveWechatArticalMsg failed, error = " + str(e))
 
