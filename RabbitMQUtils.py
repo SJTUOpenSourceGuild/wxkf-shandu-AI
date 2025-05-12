@@ -239,6 +239,7 @@ class wechatKefuConsumer:
             # TODO: 目前只能通过查看表的结构获取对应列，后续考虑优化
             artical_content = artical[9]
             artical_id = artical[0]
+            ai_answer = artical[10]
         else:
             # 新文章
             logger.info("new artical")
@@ -248,19 +249,16 @@ class wechatKefuConsumer:
             if err_code != 0:
                 logger.error("获取公众号文章数据失败")
                 return
+            try:
+                ai_answer = askAI(artical_content)
+            except Exception as e:
+                logger.error("askAI failed!")
 
         try:
             artical_msg_id = wechat_db_ops.saveWechatArticalMsg(customer_info, msg, int(artical_id))
         except Exception as e:
             logger.error("saveWechatArticalMsg failed, error = " + str(e))
 
-        """
-        TODO: 如果数据库已经有了总结，是否可以不再询问？以节省tokens？
-        """
-        try:
-            ai_answer = askAI(artical_content)
-        except Exception as e:
-            logger.error("askAI failed!")
 
 
         try:
