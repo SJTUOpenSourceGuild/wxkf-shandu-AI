@@ -90,6 +90,12 @@ class WechatMysqlOps(MysqlOpsBasic):
             logger.error("msg不是link类型")
             return -1
 
+        artical_msg_list = self.getArticalMsgWithArticalIdByUnionId(userinfo['unionid'], artical_id)
+        if len(artical_msg_list) > 0:
+            # 如果用户已经拥有指向artical_id的公众号文章消息，就不再重复保存了
+            logger.warning("user (uninon id = {}) already own msg to artical (artical id = {})".format(userinfo['unionid'], artical_id))
+            return artical_msg_list[0][0]
+
         if self.saveWechatMsg(userinfo['unionid'], msg) <= 0:
             return -1
 
