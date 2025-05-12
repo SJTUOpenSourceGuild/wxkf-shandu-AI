@@ -90,6 +90,12 @@ class WechatMysqlOps(MysqlOpsBasic):
             logger.error("msg不是link类型")
             return -1
 
+        artical_msg_list = self.getArticalMsgWithArticalIdByUnionId(userinfo['unionid'], artical_id)
+        if len(artical_msg_list) > 0:
+            # 如果用户已经拥有指向artical_id的公众号文章消息，就不再重复保存了
+            logger.warning("user (uninon id = {}) already own msg to artical (artical id = {})".format(userinfo['unionid'], artical_id))
+            return artical_msg_list[0][0]
+
         if self.saveWechatMsg(userinfo['unionid'], msg) <= 0:
             return -1
 
@@ -214,6 +220,30 @@ class WechatMysqlOps(MysqlOpsBasic):
     def setWechatArticalSummary(self, artical_id, summary):
         error_code,res = self.update(wechat_artical_table_name, {"summary":summary}, "id = " + str(artical_id))
         return error_code
+
+
+    """
+    判断用户是否拥有指向指定公众号文章的消息
+    根据用户的unionid获取他拥有的所有指向指定公众号文章的(公众号文章)消息
+    @Params:
+      - union_id:指定用户的union_id
+      - artical_id: 指定公众号文章在数据库中的id
+    @Return: 
+        Array: 数组，包含用户拥有的公众号文章消息
+    """
+    def getArticalMsgWithArticalIdByUnionId(self, union_id, artical_id):
+        # 编写SQL查询
+        sql = """
+            SELECT wechat_artical_msg.*
+            FROM msg_from_wechat
+            INNER JOIN wechat_artical_msg
+                ON msg_from_wechat.msg_id = wechat_artical_msg.msg_id
+            WHERE
+                msg_from_wechat.user_union_id = '{}'
+                AND wechat_artical_msg.artical_id = {};
+            """.format(union_id, artical_id)
+        results = self.excute_cmd(sql)
+        return results
 
     def test(self):
         """
