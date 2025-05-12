@@ -215,6 +215,30 @@ class WechatMysqlOps(MysqlOpsBasic):
         error_code,res = self.update(wechat_artical_table_name, {"summary":summary}, "id = " + str(artical_id))
         return error_code
 
+
+    """
+    判断用户是否拥有指向指定公众号文章的消息
+    根据用户的unionid获取他拥有的所有指向指定公众号文章的(公众号文章)消息
+    @Params:
+      - union_id:指定用户的union_id
+      - artical_id: 指定公众号文章在数据库中的id
+    @Return: 
+        Array: 数组，包含用户拥有的公众号文章消息
+    """
+    def getArticalMsgWithArticalIdByUnionId(self, union_id, artical_id):
+        # 编写SQL查询
+        sql = """
+            SELECT wechat_artical_msg.*
+            FROM msg_from_wechat
+            INNER JOIN wechat_artical_msg
+                ON msg_from_wechat.msg_id = wechat_artical_msg.msg_id
+            WHERE
+                msg_from_wechat.user_union_id = '{}'
+                AND wechat_artical_msg.artical_id = {};
+            """.format(union_id, artical_id)
+        results = self.excute_cmd(sql)
+        return results
+
     def test(self):
         """
         wechat_artical_dict = {
