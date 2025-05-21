@@ -221,10 +221,11 @@ class wechatKefuConsumer:
             logger.warning("no external_userid in msg")
             return
 
-        customer_info = self.__getUserInfo(msg['external_userid'])
+        customer_info = self.__getUserInfo(msg['external_userid']) # 每次都要获取用户信息吗？
         wechat_db_ops = WechatMysqlOps()
         try:
-            wechat_db_ops.save_user_to_db(customer_info)
+            if wechat_db_ops.ifUserExist(customer_info['unionid']) <= 0:
+                wechat_db_ops.save_user_to_db(customer_info)
         except Exception as e:
             logger.error("save_user_to_db failed")
 
