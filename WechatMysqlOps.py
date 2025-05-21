@@ -23,9 +23,26 @@ class WechatMysqlOps(MysqlOpsBasic):
             self.create_database(database_name)
         self.select_database(database_name)
 
+    """
+    根据union id判断用户是否存在，存在返回用户对应id，否则返回0/-1
+    """
+    def ifUserExist(self, union_id):
+        try:
+            res = self.query(user_table_name, ['id'], 'union_id = "' + union_id + '"')
+            if not res[0] or len(res[1]) == 0:
+                return 0
+            return int(res[1][0][0])
+        except Exception as e:
+            logger.error("执行query失败, union id = " + union_id + ", error = " + str(e))
+            return -1;
+
+
     def save_user_to_db(self, customer_info):
         if not 'unionid' in customer_info:
             logger.error("no unionid in customer_info")
+            return
+        if self.ifUserExist(customer_info["unionid"]) > 0:
+            logger.warning("user (union id =" + customer_info["unionid"] + " already exist")
             return
         uid = str(uuid.uuid4()).replace("-", "")[:32]
         res, new_id = self.insert(user_table_name,{"uid":uid, "union_id":customer_info['unionid']})
@@ -262,6 +279,7 @@ class WechatMysqlOps(MysqlOpsBasic):
         """
         error_code,res = self.update(wechat_artical_table_name, {"summary":"summary 2"}, "id = 2")
         print(error_code,"|" ,res)
+
 
 if __name__ == "__main__":
         wechat_db_ops = WechatMysqlOps()
