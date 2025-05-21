@@ -256,8 +256,7 @@ class wechatKefuConsumer:
                 logger.error("askAI failed!")
 
         try:
-            wechat_db_ops.saveWechatArticalMsg(customer_info, msg, int(artical_id))
-            artical_msg_id = msg["msgid"]
+            artical_msg_id = wechat_db_ops.saveWechatArticalMsg(customer_info, msg, int(artical_id))
         except Exception as e:
             logger.error("saveWechatArticalMsg failed, error = " + str(e))
 
