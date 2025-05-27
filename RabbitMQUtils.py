@@ -221,10 +221,11 @@ class wechatKefuConsumer:
             logger.warning("no external_userid in msg")
             return
 
-        customer_info = self.__getUserInfo(msg['external_userid'])
+        customer_info = self.__getUserInfo(msg['external_userid']) # 每次都要获取用户信息吗？
         wechat_db_ops = WechatMysqlOps()
         try:
-            wechat_db_ops.save_user_to_db(customer_info)
+            if wechat_db_ops.ifUserExist(customer_info['unionid']) <= 0:
+                wechat_db_ops.save_user_to_db(customer_info)
         except Exception as e:
             logger.error("save_user_to_db failed")
 
@@ -259,14 +260,12 @@ class wechatKefuConsumer:
         except Exception as e:
             logger.error("saveWechatArticalMsg failed, error = " + str(e))
 
-
-
         try:
             content = "《" + msg['link']['title'] +"》：\n" + ai_answer
             menu_list = []
             if len(content.encode('utf-8')) > 1024:
                 content = content.encode('utf-8')[:1000].decode('utf-8', 'ignore') + "……\n"
-                menu_list.append({ "type":"miniprogram", "miniprogram": {"appid":"wx394fd56312f409e6","pagepath":"pages/index/index.html","content":"点击去小程序查看更多：《"+ msg['link']['title'] +"》"}})
+            menu_list.append({ "type":"miniprogram", "miniprogram": {"appid":"wx394fd56312f409e6","pagepath":"pages/index/index.html?target_msg_id=" + str(artical_msg_id),"content":"点击去小程序查看更多：《"+ msg['link']['title'] +"》"}})
             menu_list.append({"type":"text", "text":{"content":"\n\n"}})
             menu_list.append({"type": "click", "click": {"id": "101", "content": "激活会话"}})
             response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "msgmenu", {"head_content":content,"list":menu_list},sCorpID=self.sCorpID)
