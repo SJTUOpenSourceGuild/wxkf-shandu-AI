@@ -7,7 +7,8 @@ import os
 import uuid
 from WXBizJsonMsgCrypt import WXBizJsonMsgCrypt
 import xmltodict
-from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo,getLastClickedWechatArticalInfo,uploadFileFromUrl, uploadFile,getMsgSendCount,msgSendCountClear,msgSendCountIncrease,deleteLastClickedWechatArticalInfo
+from wechatapi import WechatApi, WECHAT_API_TYPE, fetchWechatMsg, sendWechatMsgTouser, sendWechatMsgTouserOnEvent, getUserinfo,getLastClickedWechatArticalInfo,uploadFileFromUrl, uploadFile, downloadFile,getMsgSendCount,msgSendCountClear,msgSendCountIncrease,deleteLastClickedWechatArticalInfo
+from FileUtils import read_file
 from WechatMysqlOps import WechatMysqlOps
 from wechatCrawler import getWechatArticalContent
 from utils import is_url,truncate_string_to_bytes
@@ -276,6 +277,35 @@ class wechatKefuConsumer:
         if artical_id > 0 and not wechat_db_ops.setWechatArticalSummary(artical_id, ai_answer):
             logger.error("update artical summary failed!")
 
+    def __fileMsgHandler(self, msg):
+        file_path = downloadFile(msg['file']['media_id'], "./files/")
+        file_name = file_path.split('/')[-1]
+        content = read_file(file_path)
+        os.remove(file_path)
+        if content == None:
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "text", {"content":"暂不支持《" + file_name + "》，换个文件试试。"},sCorpID=self.sCorpID)
+            msgSendCountIncrease(customer_info['unionid'])
+            return;
+        try:
+            ai_answer = askAI(content)
+        except Exception as e:
+            logger.error("askAI failed!")
+
+        try:
+            content = "《" + file_name + "》：\n" + ai_answer
+            menu_list = []
+            if len(content.encode('utf-8')) > 1024:
+                content = content.encode('utf-8')[:1000].decode('utf-8', 'ignore') + "……\n"
+            #menu_list.append({ "type":"miniprogram", "miniprogram": {"appid":"wx394fd56312f409e6","pagepath":"pages/index/index.html?target_msg_id=" + str(artical_msg_id),"content":"点击去小程序查看更多：《"+ msg['link']['title'] +"》"}})
+            menu_list.append({"type":"text", "text":{"content":"\n\n"}})
+            menu_list.append({"type": "click", "click": {"id": "101", "content": "激活会话"}})
+            response = sendWechatMsgTouser(msg['external_userid'], msg['open_kfid'],msg['msgid'], "msgmenu", {"head_content":content,"list":menu_list},sCorpID=self.sCorpID)
+            msgSendCountIncrease(customer_info['unionid'])
+        except Exception as e:
+            logger.error("sendWechatMsgTouser failed!")
+
+
+
     def __sendWechatArticalInfo(self, title, desc, url, post_image_url, external_userid, open_kfid, unionid):
         send_res = sendWechatArticalInfo(title, desc, url, post_image_url, external_userid, open_kfid, self.sCorpID)
         if int(send_res['errcode']) != 0:
@@ -378,6 +408,10 @@ class wechatKefuConsumer:
                     customer_info = self.__getUserInfo(msg['external_userid'])
                     msgSendCountClear(customer_info['unionid'])
                     self.__linkMsgHandler(msg)
+                elif msg['msgtype'] == 'file':
+                    customer_info = self.__getUserInfo(msg['external_userid'])
+                    msgSendCountClear(customer_info['unionid'])
+                    self.__fileMsgHandler(msg)
                 elif msg['msgtype'] == 'event':
                     self.__eventMsgHandler(msg)
                 else:
