@@ -7,3 +7,6 @@ redis
 pymysql
 cryptography
 sseclient-py
+PyPDF2
+cos-python-sdk-v5
+python-docx
