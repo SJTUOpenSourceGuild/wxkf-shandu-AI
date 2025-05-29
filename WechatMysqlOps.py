@@ -121,9 +121,11 @@ class WechatMysqlOps(MysqlOpsBasic):
         try:
             artical_url = msg['link']['url']
             # 插入微信公众号文章消息
-            res, new_wechat_artical_msg_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
+            res, new_wechat_artical_id = self.insert(wechat_artical_msg_table_name,{"msg_id":msg["msgid"],"artical_id":artical_id,"title":msg['link']['title'], "url":artical_url})
             if not res:
-                logger.warning("insert failed!", new_wechat_artical_msg_id)
+                logger.warning("insert wechat artical message failed! artical id = ", artical_id)
+            else:
+                new_wechat_artical_msg_id = msg["msgid"]
         except Exception as e:
             logger.warning("insert failed!", new_wechat_artical_msg_id)
         finally:

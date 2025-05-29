@@ -61,6 +61,11 @@ class AbstractApi(object) :
                 url = self.replaceParams(url,urlParamList)
                 url = self.__appendArgs(url, args)
                 response = self.__httpGet(url)
+            elif 'GET-FILE' == method :
+                url = self.__makeUrl(shortUrl)
+                url = self.replaceParams(url,urlParamList)
+                path = args.get('path')
+                response = self.__httpGetFile(url, path)
             else : 
                 raise ApiException(-1, "unknown method type")
 
@@ -120,6 +125,29 @@ class AbstractApi(object) :
             print(realUrl,args)
 
         return requests.post(realUrl, data = json.dumps(args, ensure_ascii = False).encode('utf-8')).json()
+
+    def __httpGetFile(self, url, path = "./"):
+        realUrl = self.__appendToken(url)
+
+        if DEBUG is True : 
+            print(realUrl)
+
+        response = requests.get(realUrl, stream=True)
+
+        content_disposition = response.headers.get('Content-disposition','')
+        filename = content_disposition.split('filename=')[-1].strip('"') if content_disposition else "unknown_file"
+        filename = filename.encode('latin-1').decode('utf-8')  # 还原原始字节
+
+        # 保存文件
+        with open(path + filename, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        if response.status_code != 200:
+            return requests.get(realUrl).json()
+        else:
+            return {'errcode':0, 'errmsg': response.reason, 'filename': filename}
+
 
     def __httpGet(self, url) :
         realUrl = self.__appendToken(url)

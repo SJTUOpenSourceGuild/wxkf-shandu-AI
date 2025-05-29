@@ -10,6 +10,7 @@ WECHAT_API_TYPE = {
         'SEND_MSG_ON_EVENT' : ['/cgi-bin/kf/send_msg_on_event?access_token=ACCESS_TOKEN', 'POST'],
         'GET_USER_INFO': ['/cgi-bin/kf/customer/batchget?access_token=ACCESS_TOKEN', 'POST'],
         'UPLOAD_FILE' : ['/cgi-bin/media/upload?access_token=ACCESS_TOKEN&type=TYPE', 'POST-FILE'],
+        'DOWNLOAD_FILE' : ['/cgi-bin/media/get?access_token=ACCESS_TOKEN&media_id=MEDIA_ID', 'GET-FILE'],
         'CHANGE_KEFU_USERNAME' : ['/cgi-bin/kf/account/update?access_token=ACCESS_TOKEN', 'POST']
 }
 
@@ -182,6 +183,16 @@ def uploadFile(file_path,
         )
         return response
 
+def downloadFile(media_id, path,
+                        sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
+    api = WechatApi(sCorpID, secret=secret)
+    response = api.httpCall(
+            WECHAT_API_TYPE['DOWNLOAD_FILE'],
+            {'path':path},
+            [('MEDIA_ID',media_id)]
+            )
+    return path + response.get('filename')
+
 """
 将网上文件文件上传为临时素材，获取media_id,参见：https://developer.work.weixin.qq.com/document/25551
 TODO: 目前只支持image，后续增加
@@ -280,5 +291,7 @@ def changeKefuUsername(open_kf_id, new_username,
 if __name__ == '__main__':
     #changeKefuUsername('wkCP2rQAAAIsMapNIPdf8-raAEe02Lcw', "闪读AI")
     #res = uploadFile("1.jpeg")
-    res = uploadFileFromUrl("https://wework.qpic.cn/wwpic3az/137171_c45X6VRCTAGOcNo_1742733854/0")
+    #res = uploadFileFromUrl("https://wework.qpic.cn/wwpic3az/137171_c45X6VRCTAGOcNo_1742733854/0")
+    res = downloadFile("1cpk1SgsRual0tG4JJotTYAHxIjz54S5L-4OF0H1wjn5nkGS_HrENWg0fWJopbOet", "./logs/")
     print(res)
+    
