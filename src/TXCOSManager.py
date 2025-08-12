@@ -15,7 +15,7 @@ class TXCOSManager:
         
         secret_id = os.environ['COS_SECRET_ID']     # 用户的 SecretId
         secret_key = os.environ['COS_SECRET_KEY']   # 用户的 SecretKey
-        region = 'ap-shanghai'      # COS 支持的所有 region 列表参见 https://cloud.tencent.com/document/product/436/6224
+        region = os.environ['COS_REGION']      # COS 支持的所有 region 列表参见 https://cloud.tencent.com/document/product/436/6224
         token = None                # 如果使用永久密钥不需要填入 token，如果使用临时密钥需要填入，临时密钥生成和使用指引参见 https://cloud.tencent.com/document/product/436/14048
         scheme = 'https'           # 指定使用 http/https 协议来访问 COS，默认为 https，可不填
         config = CosConfig(Region=region, SecretId=secret_id, SecretKey=secret_key, Token=token, Scheme=scheme)

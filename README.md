@@ -1,18 +1,18 @@
 ## 简介
 
-本项目主要处理微信客服的回调数据，有两种启动方式：
-
-* 通过RabbitMQ消息队列，从消息队列中获取回调数据，然后处理
-    * 启动入口`python RabbitMQUtils.py`
-* 通过FastAPI，直接监听来自微信的回调函数，进而处理
-    * 启动入口`python FastAPI_server.py`
-
-前者的设计架构是由Golang，采用Gin接收来自微信的回调函数，然后将消息直接发送给RabbitMQ消息队列。python从消息队列中获取回调数据后加以处理。
+本项目“帮我读AI”项目的一部分，“帮我读AI”的设计架构中，由Golang，采用Gin接收来自微信的回调函数，然后将消息直接发送给RabbitMQ消息队列。python从消息队列中获取回调数据后加以处理。
 
 这样设计的好处是，可以结合Golang的高并发特性，和Python的生态。
 因为笔者想做的服务，需要结合AI大语言模型、从链接中获取微信文章数据等功能，python由较好的生态。
 
 ## 运行
+
+配置好环境后执行如下命令：
+
+`python main.py`
+
+
+其中配置环境包括下文提到的环境变量配置以及安装依赖
 
 ### 环境变量配置
 
@@ -37,9 +37,13 @@
 在配置回调过程中，填写的URL必须是https（不确定），配置方法见下问FastAPI相关
 
 #### 大语言模型
-这里使用腾讯云的LKE，在LKE创建AI APP获取APP KEY方便调用
 
-* BOT_APP_KEY
+项目使用“扣子”的大语言模型，因此想要正确运行，需要配置扣子相关的如下信息。
+具体含义和使用方法参见coze官方文档
+
+* COZE_API_BASE: 可以省略，如果不设置则采用coze官方的url
+* COZE_API_TOKEN
+* COZE_BOT_ID
 
 #### 数据库
 
@@ -54,6 +58,15 @@
 * REDIS_PORT
 * REDIS_PASSWORD
 
+
+#### 对象存储
+
+项目采用腾讯云的对象存储保存文件，使用前需要配置如下环境变量
+
+* COS_SECRET_ID
+* COS_SECRET_KEY
+* COS_REGION
+
 #### RabbitMQ
 
 另外服务使用了RabbitMQ消息队列，因此需要指定RabbitMQ服务器及用户密码
@@ -63,21 +76,6 @@
 * RABBITMQ_PORT
 * RABBITMQ_USERNAME
 * RABBITMQ_PASSWORD
-
-#### FastAPI相关
-
-这部分的环境变量只有选择使用FastAPI直接监听回调函数时才需要设置。
-
-* WECHAT_FASTAPI_PORT
-* SSL_KEYFILE_PATH
-* SSL_CERTIFILE_PATH
-
-WECHAT_FASTAPI_PORT是FastAPI监听的端口，比如8080
-
-SSL_KEYFILE_PATH和SSL_CERTIFILE_PATH是用来设置为HTTPS访问FastAPI服务，
-
-因此需要域名和SSL证书。将环境变量SSL_KEYFILE_PATH设置为`.com.key`证书文件的路径，将SSL_CERTIFILE_PATH设置为`.com_bundle.crt`的路径。
-
 
 ### 微信客服的回调配置
 
@@ -94,33 +92,14 @@ ret,sEchoStr=wxcpt.VerifyURL(sVerifyMsgSig, sVerifyTimeStamp,sVerifyNonce,sVerif
 
 只需要将结果中的`sEchoStr`返回即可，不过这里需要注意的是，在FastAPI中需要借助PlainTextResponse完成返回：`return PlainTextResponse(sEchoStr)`，直接返回sEchoStr会导致配置失败。
 
+## 代码结构
 
-## TODO
-
-目前完成了从RabbitMQ数据库接受微信消息，然后做简单处理。
-也完成了对发送客服消息的用户数据的保存，文本消息的保存
-
-后续还有许多工作需要做：
-
-- [x] 增强服务的健壮性
-- [x] 完成[欢迎语](https://kf.weixin.qq.com/api/doc/path/95123)的发送
-* 增加对用户发送的各类消息进行解析，包括：
-    - [x] 文本
-    - [ ] 如果是url，则爬去其中内容 
-    - [ ] 公众号文章
-    - [ ] 图片
-    - [ ] 语音
-    - [ ] 视频
-    - [ ] 文件
-        - [ ] 如果是PDF文件
-    - [ ] 聊天记录
-* 完成`UPLOAD_FILE`的HTTP请求（改请求与其它请求的差别在于，链接中需要指定TYPE，目前设计无法指定TYPE）
-
-除此之外，还有：
-
-- [x] 接入数据库（需先完成数据库设计）
-* 接入DeepSeek（可以选择豆包或DeepSeek官方）
-* 接入RAG，可以参考如下项目：
-    * [LangChain](https://github.com/langchain-ai/langchain)
-    * [Dify](https://github.com/langgenius/dify/blob/main/README_CN.md)
-    * [FastGPT](https://github.com/labring/FastGPT)
+* main.py: 消息队列主要处理逻辑，包括如何解析微信客服回调信息，如何处理等
+* wechatapi.py: 微信客服相关官方接口相关处理逻辑
+* RedisUtils.py: Redis相关代码
+* TXCOSManager.py: 腾讯云对象存储相关
+* coze.py: 扣子相关
+* wxkf_decode/ -> 微信客服加码/解码相关
+* crawler/ -> 微信公众号文字爬虫
+* mysql/ -> 数据库相关
+* utils/ -> 工具类
