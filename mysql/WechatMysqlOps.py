@@ -1,10 +1,12 @@
-from MysqlUtils import MysqlOpsBasic
+from mysql.MysqlUtils import MysqlOpsBasic
 from Logger import logger
 import uuid
 import datetime
 import json
 import hashlib
 import os
+from utils.utils import calculate_file_hash
+from TXCOSManager import TXCOSManager
 
 database_name = os.getenv('MYSQL_DATABASE')
 user_table_name = "users"
@@ -13,6 +15,8 @@ msg_table_name = "msg_from_wechat"
 text_msg_table_name = "text_msg"
 wechat_artical_msg_table_name = "wechat_artical_msg"
 wechat_artical_table_name = "wechat_artical"
+file_msg_table_name = "file_msg"
+file_table_name = "files"
 
 class WechatMysqlOps(MysqlOpsBasic):
 
@@ -171,6 +175,31 @@ class WechatMysqlOps(MysqlOpsBasic):
             logger.error("保存公众号文章出错")
             return -1
         return artical_id
+    """
+    保存文件
+    如果文件在数据库中不存在，则插入
+    如果文件已经存在于数据库，则返回当前文件的id
+    @Params
+      * data: dict，需要包含如下关键字：
+          file_name
+          file_type
+          file_size
+          hash  非空
+          url 非空
+    """
+    def saveFileDict(self, data):
+        # 1. 判断数据是否已经存在
+        # 2. 如果已经存在，就返回对应数据的id
+        # 3. 如果不存在，则插入后返回新数据的id
+        res = self.ifFileExist(data['hash'])
+        if res > 0:
+            # 已经存在指定hash的公众号文章
+            return res
+        res, new_file_id = self.insert(file_table_name,data)
+        if not res:
+            logger.warning("insert failed!" + file_table_name)
+            return -1;
+        return int(new_file_id)
 
     """
     保存微信公众号文章
@@ -208,6 +237,8 @@ class WechatMysqlOps(MysqlOpsBasic):
             res, data = self.query(wechat_artical_table_name, ['id'], 'url = "' + artical_url + '"')
             if not res:
                 return 0
+            if len(data) < 1 or len(data[0]) < 1:
+                return 0
             return int(data[0][0])
         except Exception as e:
             logger.error("执行query失败, artical url = " + artical_url + ", error = " + str(e))
@@ -221,6 +252,28 @@ class WechatMysqlOps(MysqlOpsBasic):
             return data[0]
         except Exception as e:
             logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
+            return "";
+    """
+    判断指定hash的文件是否已经存在，如果已经存在，则返回id，不存在返回0，出错返回-1
+    """
+    def ifFileExist(self, file_hash):
+        try:
+            res = self.query(file_table_name, ['id'], 'hash = "' + file_hash + '"')
+            if not res[0] or len(res[1]) == 0:
+                return 0
+            return int(res[1][0][0])
+        except Exception as e:
+            logger.error("执行query失败, hash = " + artical_hash + ", error = " + str(e))
+            return -1;
+
+    def getFileById(self, file_id):
+        try:
+            res, data = self.query(file_table_name, None, 'id = "' + str(file_id) + '"')
+            if not res:
+                return ""
+            return data[0]
+        except Exception as e:
+            logger.error("执行query失败, file_id = " + str(file_id) + ", error = " + str(e))
             return "";
 
     """
@@ -238,6 +291,10 @@ class WechatMysqlOps(MysqlOpsBasic):
 
     def setWechatArticalSummary(self, artical_id, summary):
         error_code,res = self.update(wechat_artical_table_name, {"summary":summary}, "id = " + str(artical_id))
+        return error_code
+
+    def setFileSummary(self, file_id, summary):
+        error_code,res = self.update(file_table_name, {"summary":summary}, "id = " + str(file_id))
         return error_code
 
 
@@ -264,6 +321,91 @@ class WechatMysqlOps(MysqlOpsBasic):
         results = self.excute_cmd(sql)
         return results
 
+    """
+    保存文件信息消息
+    """
+    def saveFileMsg(self, userinfo,msg, file_id, file_name):
+
+        if not 'unionid' in userinfo:
+            logger.error("没有unionid，消息无效，无法正常保存")
+            return -1
+
+        if msg['msgtype'] != 'file':
+            logger.error("msg不是file类型")
+            return -1
+
+        file_msg_list = self.getFileMsgWithFileIdByUnionId(userinfo['unionid'], file_id)
+        if len(file_msg_list) > 0:
+            # 如果用户已经拥有指向artical_id的公众号文章消息，就不再重复保存了
+            logger.warning("user (uninon id = {}) already own msg to artical (artical id = {})".format(userinfo['unionid'], file_id))
+            return file_msg_list[0][0]
+
+        if self.saveWechatMsg(userinfo['unionid'], msg) <= 0:
+            return -1
+
+        new_file_msg_id = 0
+
+        try:
+            res, new_file_msg_id = self.insert(file_msg_table_name,{"msg_id":msg["msgid"],"file_id":file_id, "file_name":file_name})
+            print(res, ", ",new_file_msg_id)
+            if not res:
+                logger.warning("insert file message failed! file id = ", file_id)
+            else:
+                new_file_msg_id = msg["msgid"]
+        except Exception as e:
+            logger.warning("insert failed!", new_file_msg_id)
+        finally:
+            return new_file_msg_id
+
+    def getFileMsgWithFileIdByUnionId(self, union_id, file_id):
+        # 编写SQL查询
+        sql = """
+            SELECT file_msg.*
+            FROM msg_from_wechat
+            INNER JOIN file_msg
+                ON msg_from_wechat.msg_id = file_msg.msg_id
+            WHERE
+                msg_from_wechat.user_union_id = '{}'
+                AND file_msg.file_id = {};
+            """.format(union_id, file_id)
+        results = self.excute_cmd(sql)
+        return results
+
+
+
+
+    """
+    @Params:
+        - file_info: dict, {file_name, file_type, url}
+        - msg
+    @Returns:
+        插入成功就返回公众号文章在数据库中的id，失败返回-1
+    """
+    def saveFile(self, file_path, bucket_name, key):
+        filename_with_ext = os.path.basename(file_path)
+        filename, file_ext = os.path.splitext(filename_with_ext)
+        hash_str = calculate_file_hash(file_path)
+        filesize = os.path.getsize(file_path)
+
+        file_dict = {}
+        file_dict["hash"] = hash_str
+        file_dict['file_name'] = filename_with_ext
+        file_dict['file_size'] = filesize
+        file_dict['file_type'] = file_ext[1:]
+        file_dict['tx_cos_bucket_name'] = bucket_name
+        file_dict['tx_cos_key'] = key
+
+        try:
+            file_id = self.saveFileDict(file_dict)
+            if file_id <= 0:
+                logger.error("保存文件出错")
+                return -1
+        except Exception as e:
+            logger.error("保存文件出错")
+            return -1
+        return file_id
+
+
     def test(self):
         """
         wechat_artical_dict = {
@@ -281,6 +423,15 @@ class WechatMysqlOps(MysqlOpsBasic):
         """
         error_code,res = self.update(wechat_artical_table_name, {"summary":"summary 2"}, "id = 2")
         print(error_code,"|" ,res)
+
+        file_path = "./logs/test2.pdf"
+        filename_with_ext = os.path.basename(file_path)
+        filename, file_ext = os.path.splitext(filename_with_ext)
+        CosManager = TXCOSManager()
+        CosManager.uploadFileWithRetry(file_path,'wx-minip-bangwodu-01-1320810990', filename_with_ext, "user-upload-files/test/")
+        url = CosManager.getObjectUrl('wx-minip-bangwodu-01-1320810990', "user-upload-files/test/" + filename_with_ext)
+
+        print(self.saveFile("./logs/test2.pdf", 'wx-minip-bangwodu-01-1320810990',"user-upload-files/test/" + filename_with_ext))
 
 
 if __name__ == "__main__":

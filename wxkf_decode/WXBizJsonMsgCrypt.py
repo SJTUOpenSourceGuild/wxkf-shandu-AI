@@ -18,7 +18,7 @@ import sys
 import socket
 import json
 
-import ierror 
+from wxkf_decode import ierror 
 
 """
 Crypto.Cipher包已不再维护，开发者可以通过以下命令下载安装最新版的加解密工具包
@@ -201,19 +201,21 @@ class WXBizJsonMsgCrypt(object):
             assert len(self.key) == 32
         except:
             throw_exception("[error]: EncodingAESKey unvalid !", FormatException) 
-            # return ierror.WXBizMsgCrypt_IllegalAesKey,None
         self.m_sToken = sToken
         self.m_sReceiveId = sReceiveId
 
-		 #验证URL
-         #@param sMsgSignature: 签名串，对应URL参数的msg_signature
-         #@param sTimeStamp: 时间戳，对应URL参数的timestamp
-         #@param sNonce: 随机串，对应URL参数的nonce
-         #@param sEchoStr: 随机串，对应URL参数的echostr
-         #@param sReplyEchoStr: 解密之后的echostr，当return返回0时有效
-         #@return：成功0，失败返回对应的错误码	
-
     def VerifyURL(self, sMsgSignature, sTimeStamp, sNonce, sEchoStr):
+        """
+        验证URL
+            @Params
+              - sMsgSignature: 签名串，对应URL参数的msg_signature
+              - sTimeStamp: 时间戳，对应URL参数的timestamp
+              - sNonce: 随机串，对应URL参数的nonce
+              - sEchoStr: 随机串，对应URL参数的echostr
+            @Returns:
+              - ret: Bool, 成功0，失败返回对应的错误码	
+              - sReplyEchoStr: 解密之后的echostr，当return返回0时有效
+        """
         sha1 = SHA1()
         ret,signature = sha1.getSHA1(self.m_sToken, sTimeStamp, sNonce, sEchoStr)
         if ret  != 0:
@@ -225,12 +227,16 @@ class WXBizJsonMsgCrypt(object):
         return ret,sReplyEchoStr
 	
     def EncryptMsg(self, sReplyMsg, sNonce, timestamp = None):
-        #将企业回复用户的消息加密打包
-        #@param sReplyMsg: 企业号待回复用户的消息，json格式的字符串
-        #@param sTimeStamp: 时间戳，可以自己生成，也可以用URL参数的timestamp,如为None则自动用当前时间
-        #@param sNonce: 随机串，可以自己生成，也可以用URL参数的nonce
-        #sEncryptMsg: 加密后的可以直接回复用户的密文，包括msg_signature, timestamp, nonce, encrypt的json格式的字符串,
-        #return：成功0，sEncryptMsg,失败返回对应的错误码None     
+        """
+        将企业回复用户的消息加密打包
+        @Params:
+          - sReplyMsg: 企业号待回复用户的消息，json格式的字符串
+          - sTimeStamp: 时间戳，可以自己生成，也可以用URL参数的timestamp,如为None则自动用当前时间
+          - sNonce: 随机串，可以自己生成，也可以用URL参数的nonce
+        @Return
+          - ret: Bool, 成功0，sEncryptMsg,失败返回对应的错误码None     
+          - sEncryptMsg: 加密后的可以直接回复用户的密文，包括msg_signature, timestamp, nonce, encrypt的json格式的字符串,
+        """
         pc = Prpcrypt(self.key) 
         ret,encrypt = pc.encrypt(sReplyMsg, self.m_sReceiveId)
         if ret != 0:
@@ -246,13 +252,17 @@ class WXBizJsonMsgCrypt(object):
         return ret,jsonParse.generate(encrypt, signature, timestamp, sNonce)  
 
     def DecryptMsg(self, sPostData, sMsgSignature, sTimeStamp, sNonce):
-        # 检验消息的真实性，并且获取解密后的明文
-        # @param sMsgSignature: 签名串，对应URL参数的msg_signature
-        # @param sTimeStamp: 时间戳，对应URL参数的timestamp
-        # @param sNonce: 随机串，对应URL参数的nonce
-        # @param sPostData: 密文，对应POST请求的数据
-        #  json_content: 解密后的原文，当return返回0时有效
-        # @return: 成功0，失败返回对应的错误码
+        """
+        检验消息的真实性，并且获取解密后的明文
+        @Params
+          - sMsgSignature: 签名串，对应URL参数的msg_signature
+          - sTimeStamp: 时间戳，对应URL参数的timestamp
+          - sNonce: 随机串，对应URL参数的nonce
+          - sPostData: 密文，对应POST请求的数据
+        @Returns:
+          - ret: 成功0，失败返回对应的错误码
+          - json_content: 解密后的原文，当return返回0时有效
+        """
          # 验证安全签名 
         jsonParse = JsonParse()
         ret,encrypt = jsonParse.extract(sPostData)

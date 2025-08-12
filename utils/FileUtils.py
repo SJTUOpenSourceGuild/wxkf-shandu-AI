@@ -1,5 +1,5 @@
-from PDFUtils import readPDF
-from WordUtils import read_docx, read_doc_by_antiword, read_txt_safe
+from utils.PDFUtils import readPDF
+from utils.WordUtils import read_docx, read_doc_by_antiword, read_txt_safe
 from typing import Optional
 import os
 import pathlib
@@ -50,7 +50,7 @@ def validate_file(file_path: str) -> bool:
 
 if __name__ == "__main__":
     files = [
-        "./logs/个人简历2全面的.pdf",         # PDF文件
+        "test.pdf",         # PDF文件
         "test.docx",      # DOCX文件
         "test2.doc",   # DOC文件
         "test.txt",          # 文本文件

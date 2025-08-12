@@ -165,23 +165,47 @@ def getLastClickedWechatArticalInfo(uionid):
     
     return data
 
+def getLastClickedInfo(uionid):
+    """获取用户最后一次点击记录"""
+    key = "unionid:" + uionid +":last_click_info"
+    redis_conn, err_code = RedisConnect()
+    if err_code != 0:
+        logger.warning("connect to redis failed!")
+        return None
+    data = redis_conn.hgetall(key)
+    
+    if not data:
+        logger.warning("no value corresponding to " + key)
+        return None
+    
+    return data
+
 """
 将本地文件上传为临时素材，获取media_id,参见：https://developer.work.weixin.qq.com/document/25551
 TODO: 目前只支持image，后续增加
 """
-def uploadFile(file_path,
+def uploadFile(file_path, file_type = "image",
                         sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
     api = WechatApi(sCorpID, secret=secret)
+    file_name = os.path.basename(file_path)
     with open(file_path, "rb") as file:
-        files = {
-            "media": (file.name, file, "application/octet-stream")  # 自动填充 filename/content-type
-        }
-        response = api.httpCall(
-            WECHAT_API_TYPE['UPLOAD_FILE'],
-            files,
-            [('TYPE',"image")]
-        )
-        return response
+        try:
+            files = {
+                "media": (file_name, file, "application/octet-stream")  # 自动填充 filename/content-type
+            }
+            response = api.httpCall(
+                WECHAT_API_TYPE['UPLOAD_FILE'],
+                files,
+                [('TYPE',file_type)]
+            )
+            if response['errcode'] == 0:
+                return response['media_id']
+            else:
+                return ""
+        except Exception as e:
+            print(e)
+            return ""
+    return ""
 
 def downloadFile(media_id, path,
                         sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
@@ -205,7 +229,7 @@ def uploadFileFromUrl(url,
         with requests.get(url, stream=True) as r:
             for chunk in r.iter_content(chunk_size=8192):
                 tmp_file.write(chunk)
-        return uploadFile(tmp_file.name, sCorpID, secret)
+        return uploadFile(tmp_file.name)
 
 """
 给用户发送消息
@@ -259,7 +283,7 @@ need_enter_session_context:是否需要返回客户48小时内最后一次进入
 
 结果格式：{'errcode': 0, 'errmsg': 'ok', 'customer_list': [{'external_userid': 'wmxxxxxxxxxx', 'nickname': '昵称', 'avatar': 'http://wx.qlogo.cn/xxxx', 'gender': 1}], 'invalid_external_userid': []}
 """
-def getUserinfo(external_userid_list, need_enter_session_context = 0,
+def getUserinfoList(external_userid_list, need_enter_session_context = 0,
         sCorpID=os.environ['WECHAT_CORP_ID'], secret=os.environ['WECHAT_SECRET']):
     api = WechatApi(sCorpID, secret=secret)
     response = api.httpCall(
